@@ -1,23 +1,30 @@
-# Mihomo API Configuration
-mihomo_api_url: "http://127.0.0.1:9091"  # The base URL of your Mihomo API
-mihomo_api_timeout: 5                    # Timeout for API requests in seconds
-mihomo_api_secret: "mihomo666"                    # Secret for API authentication (if required)
+# Mihomo API 配置
+mihomo_api_url: "http://127.0.0.1:9090"  # Mihomo API 的基础 URL
+mihomo_api_timeout: 5                    # API 请求超时时间（秒）
+mihomo_api_secret: "mihomo666"           # API 认证密钥（如果需要）
 
-# API Retry Configuration
-# Configuration for exponential backoff with jitter
+# Mihomo 配置文件路径
+# Mihomo 配置文件的路径（例如："C:/path/to/mihomo/config.yaml"）
+# 这是访问静态 rule-provider 定义所必需的，这些定义无法通过 API 获得
+mihomo_config_path: "D:\\Software\\Mihomo\\config.yaml"                   
+
+# API 重试配置
+# 指数退避与抖动的配置
 api_retry_config:
-  max_retries: 5          # Maximum number of retry attempts
-  initial_backoff: 1      # Initial backoff time in seconds
-  max_backoff: 16         # Maximum backoff time in seconds
-  jitter: true            # Whether to add jitter to the backoff time
+  max_retries: 5          # 最大重试次数
+  initial_backoff: 1      # 初始退避时间（秒）
+  max_backoff: 16         # 最大退避时间（秒）
+  jitter: true            # 是否添加抖动
 
-# Monitoring Configuration
-polling_interval: 2       # How often to poll the Mihomo API for changes (in seconds)
-debounce_interval: 0.5    # How long to wait after a change before triggering an action (in seconds)
+# 监控配置
+polling_interval: 2       # 轮询 Mihomo API 变化的时间间隔（秒）
+debounce_interval: 0.5    # 变化后触发操作前的等待时间（秒）
 
-# Mosdns Configuration
-mosdns_config_path: "d:/Software/MMS2.0/test_output/mihomo_generated.list"  # Path to the generated Mosdns rule file
-mosdns_reload_command: "echo 'Mosdns reload command executed'"     # Command to reload Mosdns service
+# Mosdns 配置
+# 生成的 Mosdns 规则文件将保存在此目录中
+# 这应该是一个目录路径，而不是文件路径
+mosdns_config_path: "D:\\Software\\MMS2.0\\output"
+mosdns_reload_command: "echo 'Mosdns reload command executed'"     # 重载 Mosdns 服务的命令
 
-# Logging Configuration
-log_level: "INFO"         # Log level (DEBUG, INFO, WARN, ERROR, CRITICAL)
+# 日志配置
+log_level: "INFO"         # 日志级别（DEBUG, INFO, WARN, ERROR, CRITICAL）

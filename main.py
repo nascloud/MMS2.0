@@ -11,8 +11,9 @@ from typing import Optional
 from mihomo_sync.logger import setup_logger
 from mihomo_sync.config import ConfigManager
 from mihomo_sync.modules.api_client import MihomoApiClient
-from mihomo_sync.modules.mosdns_controller import MosdnsServiceController, MosdnsRuleGenerator
+from mihomo_sync.modules.mosdns_controller import MosdnsServiceController
 from mihomo_sync.modules.state_monitor import StateMonitor
+from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
 
 
 class MihomoMosdnsSyncService:
@@ -22,9 +23,9 @@ class MihomoMosdnsSyncService:
         """Initialize the service."""
         self.logger = logging.getLogger(__name__)
         self.config_manager: Optional[ConfigManager] = None
+        self.mihomo_config_parser: Optional[MihomoConfigParser] = None
         self.api_client: Optional[MihomoApiClient] = None
         self.mosdns_controller: Optional[MosdnsServiceController] = None
-        self.rule_generator: Optional[MosdnsRuleGenerator] = None
         self.state_monitor: Optional[StateMonitor] = None
         self.shutdown_event = asyncio.Event()
 
@@ -43,6 +44,9 @@ class MihomoMosdnsSyncService:
             # Reinitialize logger after setup_logger call
             self.logger = logging.getLogger(__name__)
             
+            # Initialize Mihomo config parser
+            self.mihomo_config_parser = MihomoConfigParser()
+            
             # Initialize API client
             self.api_client = MihomoApiClient(
                 api_base_url=self.config_manager.get_mihomo_api_url(),
@@ -56,19 +60,15 @@ class MihomoMosdnsSyncService:
                 reload_command=self.config_manager.get_mosdns_reload_command()
             )
             
-            # Initialize rule generator
-            self.rule_generator = MosdnsRuleGenerator(
-                api_client=self.api_client,
-                mosdns_controller=self.mosdns_controller,
-                mosdns_config_path=self.config_manager.get_mosdns_config_path()
-            )
-            
             # Initialize state monitor
             self.state_monitor = StateMonitor(
                 api_client=self.api_client,
+                mosdns_controller=self.mosdns_controller,
+                mosdns_config_path=self.config_manager.get_mosdns_config_path(),
                 polling_interval=self.config_manager.get_polling_interval(),
                 debounce_interval=self.config_manager.get_debounce_interval(),
-                on_change_callback=self.rule_generator.run
+                mihomo_config_parser=self.mihomo_config_parser,
+                mihomo_config_path=self.config_manager.get_mihomo_config_path()
             )
             
             self.logger.info("Service initialization completed")
@@ -115,8 +115,7 @@ class MihomoMosdnsSyncService:
             self.logger.critical("Config manager not initialized")
             return False
             
-        config_path = self.config_manager.get_mosdns_config_path()
-        config_dir = os.path.dirname(config_path)
+        config_dir = self.config_manager.get_mosdns_config_path()
         
         if not os.path.exists(config_dir):
             self.logger.critical(
@@ -143,6 +142,24 @@ class MihomoMosdnsSyncService:
             }
         )
         
+        # Check Mihomo config file if specified
+        mihomo_config_path = self.config_manager.get_mihomo_config_path()
+        if mihomo_config_path:
+            if not os.path.exists(mihomo_config_path):
+                self.logger.critical(
+                    "Health check failed: Mihomo config file does not exist",
+                    extra={
+                        "config_path": mihomo_config_path
+                    }
+                )
+                return False
+            self.logger.info(
+                "Mihomo config file check passed",
+                extra={
+                    "config_path": mihomo_config_path
+                }
+            )
+        
         return True
 
     async def start(self):
@@ -163,13 +180,14 @@ class MihomoMosdnsSyncService:
                     loop.add_signal_handler(sig, self._signal_handler, sig)
             
             # Check that required components are initialized
-            if self.rule_generator is None or self.state_monitor is None:
+            if self.state_monitor is None:
                 self.logger.critical("Required components not initialized")
                 return 1
                 
             # Run initial rule generation to ensure Mosdns has a config
             self.logger.info("Performing initial rule generation")
-            await self.rule_generator.run()
+            # Create a temporary method to call the internal rule generation
+            await self.state_monitor._generate_rules()
             
             # Start the state monitor
             self.logger.info("Starting state monitor")

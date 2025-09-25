@@ -11,6 +11,7 @@
 - **结构化日志**: JSON 格式日志便于监控和调试
 - **容器化部署**: 提供 Docker 镜像便于部署
 - **原子化操作**: 配置文件写入和重载操作保证原子性
+- **规则集支持**: 支持解析 Mihomo 的 rule-providers 规则集
 
 ## 工作原理
 
@@ -35,6 +36,11 @@ mihomo_api_url: "http://127.0.0.1:9090"  # Mihomo API 地址
 mihomo_api_timeout: 5                    # API 请求超时时间(秒)
 mihomo_api_secret: ""                    # API 认证密钥(如果需要)
 
+# Mihomo Configuration File Path
+# Path to the Mihomo configuration file (e.g., "C:/path/to/mihomo/config.yaml")
+# This is needed to access static rule-provider definitions that are not available via API
+mihomo_config_path: ""                   
+
 # API 重试配置 (指数退避与抖动)
 api_retry_config:
   max_retries: 5          # 最大重试次数
@@ -54,6 +60,41 @@ mosdns_reload_command: "sudo mosdns reload -d /etc/mosdns"     # 重载 Mosdns �
 log_level: "INFO"         # 日志级别
 ```
 
+### Mihomo 配置文件解析
+
+为了正确处理 Mihomo 的 rule-providers 规则集，特别是 mrs 格式的规则集，需要配置 `mihomo_config_path` 指向 Mihomo 的主配置文件。
+
+Mihomo 的配置文件通常包含 rule-providers 部分，定义了规则集的来源：
+
+```yaml
+# Rule providers
+rule-providers:
+  # Domain rule provider from URL
+  google_domains:
+    type: http
+    behavior: domain
+    url: "https://example.com/google_domains.list"
+    path: "./rules/google_domains.list"
+    interval: 86400
+
+  # MRS format rule provider
+  mrs_domains:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://example.com/mrs_domains.mrs"
+    path: "./rules/mrs_domains.list"
+    interval: 86400
+```
+
+当配置了 `mihomo_config_path` 后，服务会解析该配置文件以获取 rule-providers 的完整定义，包括：
+- URL 地址（用于下载远程规则集）
+- 本地路径（用于读取本地规则集）
+- 格式类型（如 mrs 格式）
+- 行为类型（domain, ipcidr, classical）
+
+这使得服务能够正确处理 mrs 格式的规则集，将其转换为标准格式进行处理。
+
 ### Docker 运行
 
 ```bash
@@ -61,6 +102,7 @@ docker run -d \
   --name mihomo-mosdns-sync \
   -v /path/to/config:/home/appuser/app/config \
   -v /etc/mosdns/rules:/etc/mosdns/rules \
+  -v /path/to/mihomo/config.yaml:/home/appuser/app/mihomo_config.yaml \
   --restart unless-stopped \
   mihomo-mosdns-sync:latest
 ```
@@ -87,6 +129,7 @@ services:
     volumes:
       - ./config:/home/appuser/app/config
       - /etc/mosdns/rules:/etc/mosdns/rules
+      - ./mihomo_config.yaml:/home/appuser/app/mihomo_config.yaml
     restart: unless-stopped
 ```
 
@@ -131,7 +174,11 @@ mihomo_sync/
     ├── api_client.py      # Mihomo API 客户端
     ├── policy_resolver.py # 策略解析器
     ├── state_monitor.py   # 状态监视器
-    └── mosdns_controller.py # Mosdns 控制器和规则生成器
+    ├── mosdns_controller.py # Mosdns 控制器和规则生成器
+    ├── mihomo_config_parser.py # Mihomo 配置文件解析器
+    ├── rule_parser.py     # 规则解析器
+    ├── rule_converter.py  # 规则转换器
+    └── rule_merger.py     # 规则合并器
 ```
 
 ### 本地运行

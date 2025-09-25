@@ -1,0 +1,78 @@
+# Mihomo Configuration Example
+# This is an example configuration showing how to set up rule-providers
+# that can be parsed by the Mihomo-Mosdns sync service
+
+# Proxy providers
+proxy-providers:
+  provider1:
+    type: http
+    url: "https://example.com/proxies.yaml"
+    interval: 3600
+    health-check:
+      enable: true
+      url: "https://www.gstatic.com/generate_204"
+      interval: 300
+
+# Rule providers
+rule-providers:
+  # Domain rule provider from URL
+  google_domains:
+    type: http
+    behavior: domain
+    url: "https://example.com/google_domains.list"
+    path: "./rules/google_domains.list"
+    interval: 86400
+
+  # IPCIDR rule provider from URL
+  private_ips:
+    type: http
+    behavior: ipcidr
+    url: "https://example.com/private_ips.list"
+    path: "./rules/private_ips.list"
+    interval: 86400
+
+  # Classical rule provider from URL
+  ads_rules:
+    type: http
+    behavior: classical
+    url: "https://example.com/ads_rules.yaml"
+    path: "./rules/ads_rules.yaml"
+    interval: 86400
+
+  # Rule provider from local file
+  local_domains:
+    type: file
+    behavior: domain
+    path: "./rules/local_domains.list"
+
+  # MRS format rule provider
+  mrs_domains:
+    type: http
+    behavior: domain
+    format: mrs
+    url: "https://example.com/mrs_domains.mrs"
+    path: "./rules/mrs_domains.list"
+    interval: 86400
+
+# Proxies
+proxies:
+  - name: "DIRECT"
+    type: direct
+  - name: "REJECT"
+    type: reject
+
+# Proxy groups
+proxy-groups:
+  - name: "🚀 Proxy"
+    type: select
+    proxies:
+      - "DIRECT"
+
+# Rules
+rules:
+  - RULE-SET,google_domains,🚀 Proxy
+  - RULE-SET,private_ips,REJECT
+  - RULE-SET,ads_rules,REJECT
+  - RULE-SET,local_domains,DIRECT
+  - RULE-SET,mrs_domains,🚀 Proxy
+  - MATCH,DIRECT

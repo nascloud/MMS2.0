@@ -19,7 +19,7 @@ def setup_logger(log_level='INFO'):
     # Create a JSON formatter with additional fields for structured logging
     json_formatter = JsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s',
-        rename_fields={'asctime': 'timestamp', 'name': 'logger', 'levelname': 'level'},
+        rename_fields={'asctime': 'timestamp', 'name': 'module', 'levelname': 'level'},
         static_fields={'service_name': 'mihomo-mosdns-sync'}
     )
     

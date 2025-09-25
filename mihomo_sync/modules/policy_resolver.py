@@ -5,46 +5,45 @@ from typing import Dict, Any, Set
 class PolicyResolver:
     """A class to resolve policy chains and find the final出口 node."""
     
-    def __init__(self, proxies_data: Dict[str, Any]):
+    def __init__(self):
         """
-        Initialize the PolicyResolver with proxies data.
-        
-        Args:
-            proxies_data (dict): All proxy/strategy group data from the API.
+        Initialize the PolicyResolver.
         """
-        self.proxies_data = proxies_data
         self.logger = logging.getLogger(__name__)
         # Cache for memoization to avoid repeated calculations
         self._cache = {}
         
-    def resolve(self, policy_name: str) -> str:
+    def resolve(self, policy_name: str, proxies_data: Dict[str, Any]) -> str:
         """
         Resolve a policy name to its final出口 node.
         
         Args:
             policy_name (str): The name of the policy to resolve.
+            proxies_data (dict): All proxy/strategy group data from the API.
             
         Returns:
             str: The name of the final出口 node.
         """
         # Check cache first
-        if policy_name in self._cache:
-            return self._cache[policy_name]
+        cache_key = f"{policy_name}"
+        if cache_key in self._cache:
+            return self._cache[cache_key]
             
         # Start resolution with an empty visited set
-        result = self._resolve_recursive(policy_name, set())
+        result = self._resolve_recursive(policy_name, set(), proxies_data)
         
         # Cache the result
-        self._cache[policy_name] = result
+        self._cache[cache_key] = result
         return result
         
-    def _resolve_recursive(self, policy_name: str, visited: Set[str]) -> str:
+    def _resolve_recursive(self, policy_name: str, visited: Set[str], proxies_data: Dict[str, Any]) -> str:
         """
         Recursively resolve a policy name, detecting circular dependencies.
         
         Args:
             policy_name (str): The name of the policy to resolve.
             visited (set): Set of policy names in the current resolution path.
+            proxies_data (dict): All proxy/strategy group data from the API.
             
         Returns:
             str: The name of the final出口 node.
@@ -62,7 +61,7 @@ class PolicyResolver:
             return "DIRECT"
             
         # Get policy data
-        policy_data = self.proxies_data.get("proxies", {}).get(policy_name)
+        policy_data = proxies_data.get("proxies", {}).get(policy_name)
         if not policy_data:
             self.logger.warning(
                 "Policy not found in proxies data",
@@ -89,4 +88,4 @@ class PolicyResolver:
         new_visited.add(policy_name)
         
         # Recursively resolve the selected policy
-        return self._resolve_recursive(now, new_visited)
+        return self._resolve_recursive(now, new_visited, proxies_data)

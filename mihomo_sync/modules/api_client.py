@@ -161,6 +161,18 @@ class MihomoApiClient:
             ApiClientError: If the request fails.
         """
         return await self._request("GET", "/providers/rules")
+
+    async def get_config(self) -> Dict[str, Any]:
+        """
+        Get configuration from the Mihomo API.
+        
+        Returns:
+            dict: Configuration data from the API.
+            
+        Raises:
+            ApiClientError: If the request fails.
+        """
+        return await self._request("GET", "/configs")
         
     async def close(self):
         """Close the HTTP client session."""

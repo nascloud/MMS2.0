@@ -67,6 +67,10 @@ class ConfigManager:
         """Get the API secret for authentication."""
         return self._config.get('mihomo_api_secret', '')
 
+    def get_mihomo_config_path(self):
+        """Get the path to the Mihomo configuration file."""
+        return self._config.get('mihomo_config_path', '')
+
     def get_api_retry_config(self):
         """Get the API retry configuration dictionary."""
         return self._config.get('api_retry_config')
