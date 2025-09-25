@@ -1,0 +1,23 @@
+# Mihomo API Configuration
+mihomo_api_url: "http://127.0.0.1:9090"  # The base URL of your Mihomo API
+mihomo_api_timeout: 5                    # Timeout for API requests in seconds
+mihomo_api_secret: ""                    # Secret for API authentication (if required)
+
+# API Retry Configuration
+# Configuration for exponential backoff with jitter
+api_retry_config:
+  max_retries: 5          # Maximum number of retry attempts
+  initial_backoff: 1      # Initial backoff time in seconds
+  max_backoff: 16         # Maximum backoff time in seconds
+  jitter: true            # Whether to add jitter to the backoff time
+
+# Monitoring Configuration
+polling_interval: 2       # How often to poll the Mihomo API for changes (in seconds)
+debounce_interval: 0.5    # How long to wait after a change before triggering an action (in seconds)
+
+# Mosdns Configuration
+mosdns_config_path: "/etc/mosdns/rules/mihomo_generated.list"  # Path to the generated Mosdns rule file
+mosdns_reload_command: "sudo mosdns reload -d /etc/mosdns"     # Command to reload Mosdns service
+
+# Logging Configuration
+log_level: "INFO"         # Log level (DEBUG, INFO, WARN, ERROR, CRITICAL)
