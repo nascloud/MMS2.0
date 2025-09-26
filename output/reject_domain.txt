@@ -1,4 +1,4 @@
-and:((DstPort,443) && (Network,udp))
+domain:adobe.io
 domain:ads.inmobi.com
 domain:adsappier.com
 domain:amazon-adsystem.com
@@ -8,5 +8,4 @@ domain:criteo.com
 domain:pubmatic.com
 domain:smaato.net
 domain:tappx.com
-domainsuffix:adobe.io
 keyword:googleads
