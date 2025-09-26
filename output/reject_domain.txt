@@ -1,0 +1,11 @@
+domain:adobe.io
+domain:ads.inmobi.com
+domain:adsappier.com
+domain:amazon-adsystem.com
+domain:appier.net
+domain:appiersig.co
+domain:criteo.com
+domain:pubmatic.com
+domain:smaato.net
+domain:tappx.com
+keyword:googleads
