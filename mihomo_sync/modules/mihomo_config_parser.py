@@ -30,7 +30,8 @@ class MihomoConfigParser:
             
         try:
             with open(config_path, 'r', encoding='utf-8') as f:
-                config_data = yaml.safe_load(f)
+                # Use FullLoader to properly handle YAML anchors and merges
+                config_data = yaml.load(f, Loader=yaml.FullLoader)
             
             self.logger.info(
                 "Successfully parsed Mihomo configuration file",
@@ -63,9 +64,19 @@ class MihomoConfigParser:
             
         rule_providers = config_data.get('rule-providers', {})
         
+        # Process each provider to resolve YAML anchors and merges
+        processed_providers = {}
+        for provider_name, provider_data in rule_providers.items():
+            # Create a deep copy of the provider data to avoid modifying the original
+            processed_provider = {}
+            if isinstance(provider_data, dict):
+                for key, value in provider_data.items():
+                    processed_provider[key] = value
+            processed_providers[provider_name] = processed_provider
+        
         self.logger.debug(
             "Extracted rule providers from configuration",
-            extra={"providers_count": len(rule_providers)}
+            extra={"providers_count": len(processed_providers)}
         )
         
-        return rule_providers
+        return processed_providers

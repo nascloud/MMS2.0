@@ -27,4 +27,4 @@ mosdns_config_path: "D:\\Software\\MMS2.0\\output"
 mosdns_reload_command: "echo 'Mosdns reload command executed'"     # 重载 Mosdns 服务的命令
 
 # 日志配置
-log_level: "INFO"         # 日志级别（DEBUG, INFO, WARN, ERROR, CRITICAL）
+log_level: "DEBUG"         # 日志级别（DEBUG, INFO, WARN, ERROR, CRITICAL）

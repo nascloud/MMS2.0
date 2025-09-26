@@ -27,14 +27,14 @@ class RuleMerger:
             # Create output directory
             os.makedirs(output_dir, exist_ok=True)
             
-            # Define policy directories to process
-            policies = ["DIRECT", "PROXY", "REJECT"]
-            
-            # Process each policy
-            for policy in policies:
-                policy_temp_dir = os.path.join(temp_dir, policy.lower())
-                if os.path.exists(policy_temp_dir):
-                    self._merge_policy_rules(policy_temp_dir, policy, output_dir)
+            # Process all policy directories in temp_dir
+            if os.path.exists(temp_dir):
+                for policy_dir in os.listdir(temp_dir):
+                    policy_temp_dir = os.path.join(temp_dir, policy_dir)
+                    if os.path.isdir(policy_temp_dir):
+                        # Convert policy name to uppercase for consistency
+                        policy = policy_dir.upper()
+                        self._merge_policy_rules(policy_temp_dir, policy, output_dir)
             
             self.logger.info(
                 "Successfully merged all rules",
