@@ -43,6 +43,7 @@ class StateMonitor:
         self.merger = merger
         self.logger = logging.getLogger(__name__)
         self._last_state_hash = None
+        self._last_state_snapshot = None
         self._debounce_task = None
         self.policy_resolver = PolicyResolver()
         self.logger.debug(
@@ -130,6 +131,15 @@ class StateMonitor:
                 }
             )
             
+            # 如果这是第一次运行，保存初始状态用于比较
+            if self._last_state_snapshot is None:
+                self._last_state_snapshot = state_snapshot
+            else:
+                # 比较状态变化并记录详细信息
+                self._log_state_changes(self._last_state_snapshot, state_snapshot)
+                # 更新最后状态快照
+                self._last_state_snapshot = state_snapshot
+            
             return hash_result
             
         except Exception as e:
@@ -143,6 +153,101 @@ class StateMonitor:
                 }
             )
             raise
+
+    def _log_state_changes(self, old_state: Dict[str, Any], new_state: Dict[str, Any]) -> None:
+        """
+        记录状态变化的详细信息。
+        
+        Args:
+            old_state (dict): 之前的状态快照
+            new_state (dict): 当前的状态快照
+        """
+        # 检查代理变化
+        old_proxies = old_state.get("proxies", {})
+        new_proxies = new_state.get("proxies", {})
+        
+        # 检查新增的代理
+        for name, proxy in new_proxies.items():
+            if name not in old_proxies:
+                self.logger.debug(
+                    f"检测到新增策略组: {name}",
+                    extra={
+                        "resolved_policy": proxy.get("resolved_policy"),
+                        "type": "新增"
+                    }
+                )
+            elif old_proxies[name] != proxy:
+                self.logger.debug(
+                    f"检测到策略组变化: {name}",
+                    extra={
+                        "old_policy": old_proxies[name].get("resolved_policy"),
+                        "new_policy": proxy.get("resolved_policy"),
+                        "type": "修改"
+                    }
+                )
+        
+        # 检查删除的代理
+        for name in old_proxies:
+            if name not in new_proxies:
+                self.logger.debug(
+                    f"检测到删除策略组: {name}",
+                    extra={
+                        "old_policy": old_proxies[name].get("resolved_policy"),
+                        "type": "删除"
+                    }
+                )
+        
+        # 检查规则提供者变化
+        old_providers = old_state.get("rule_providers", {})
+        new_providers = new_state.get("rule_providers", {})
+        
+        # 检查新增的提供者
+        for name, provider in new_providers.items():
+            if name not in old_providers:
+                self.logger.debug(
+                    f"检测到新增规则提供者: {name}",
+                    extra={
+                        "updatedAt": provider.get("updatedAt"),
+                        "vehicleType": provider.get("vehicleType"),
+                        "type": "新增"
+                    }
+                )
+            elif old_providers[name] != provider:
+                old_provider = old_providers[name]
+                new_provider = provider
+                changes = {}
+                if old_provider.get("updatedAt") != new_provider.get("updatedAt"):
+                    changes["updatedAt"] = {
+                        "old": old_provider.get("updatedAt"),
+                        "new": new_provider.get("updatedAt")
+                    }
+                if old_provider.get("vehicleType") != new_provider.get("vehicleType"):
+                    changes["vehicleType"] = {
+                        "old": old_provider.get("vehicleType"),
+                        "new": new_provider.get("vehicleType")
+                    }
+                
+                if changes:
+                    self.logger.debug(
+                        f"检测到规则提供者变化: {name}",
+                        extra={
+                            "changes": changes,
+                            "type": "修改"
+                        }
+                    )
+        
+        # 检查删除的提供者
+        for name in old_providers:
+            if name not in new_providers:
+                old_provider = old_providers[name]
+                self.logger.debug(
+                    f"检测到删除规则提供者: {name}",
+                    extra={
+                        "old_updatedAt": old_provider.get("updatedAt"),
+                        "old_vehicleType": old_provider.get("vehicleType"),
+                        "type": "删除"
+                    }
+                )
 
     def _is_strategy_group(self, proxy_data: Dict[str, Any]) -> bool:
         """
