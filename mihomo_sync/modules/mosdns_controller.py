@@ -5,42 +5,42 @@ from typing import Dict, Any
 
 
 class MosdnsServiceController:
-    """Controller for managing the Mosdns service."""
+    """Mosdns服务的控制器。"""
     
     def __init__(self, reload_command: str):
         """
-        Initialize the MosdnsServiceController.
+        初始化MosdnsServiceController。
         
         Args:
-            reload_command (str): Command to reload the Mosdns service
+            reload_command (str): 重新加载Mosdns服务的命令
         """
         self.reload_command = reload_command
         self.logger = logging.getLogger(__name__)
 
     async def reload(self) -> bool:
         """
-        Reload the Mosdns service.
+        重新加载Mosdns服务。
         
         Returns:
-            bool: True if reload was successful, False otherwise
+            bool: 如果重新加载成功返回True，否则返回False
         """
         try:
-            self.logger.info("Reloading Mosdns service")
+            self.logger.info("正在重新加载Mosdns服务")
             
-            # Create subprocess
+            # 创建子进程
             process = await asyncio.create_subprocess_shell(
                 self.reload_command,
                 stdout=asyncio.subprocess.PIPE,
                 stderr=asyncio.subprocess.PIPE
             )
             
-            # Wait for the process to complete
+            # 等待进程完成
             stdout, stderr = await process.communicate()
             
-            # Check return code
+            # 检查返回码
             if process.returncode == 0:
                 self.logger.info(
-                    "Mosdns service reloaded successfully",
+                    "Mosdns服务重新加载成功",
                     extra={
                         "return_code": process.returncode,
                         "stdout": stdout.decode().strip() if stdout else ""
@@ -49,7 +49,7 @@ class MosdnsServiceController:
                 return True
             else:
                 self.logger.error(
-                    "Failed to reload Mosdns service",
+                    "重新加载Mosdns服务失败",
                     extra={
                         "command": self.reload_command,
                         "return_code": process.returncode,
@@ -61,7 +61,7 @@ class MosdnsServiceController:
                 
         except Exception as e:
             self.logger.error(
-                "Exception occurred while reloading Mosdns service",
+                "重新加载Mosdns服务时发生异常",
                 extra={
                     "command": self.reload_command,
                     "error": str(e)

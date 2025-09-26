@@ -5,29 +5,29 @@ from typing import Set
 
 
 class RuleMerger:
-    """Merger for combining intermediate files into final Mosdns rule files."""
+    """将中间文件合并为最终Mosdns规则文件的合并器。"""
     
     def __init__(self):
-        """Initialize the RuleMerger."""
+        """初始化RuleMerger。"""
         self.logger = logging.getLogger(__name__)
     
     def merge_from_intermediate(self, intermediate_path: str, final_output_path: str) -> None:
         """
-        Merge rules from intermediate files into final Mosdns rule files.
+        将中间文件中的规则合并为最终的Mosdns规则文件。
         
         Args:
-            intermediate_path (str): Path to the intermediate files directory
-            final_output_path (str): Path to the final output directory
+            intermediate_path (str): 中间文件目录路径
+            final_output_path (str): 最终输出目录路径
         """
         try:
-            # Step 1: Prepare workspace
+            # 步骤1：准备工作空间
             self._prepare_workspace(final_output_path)
             
-            # Step 2: Process intermediate directory
+            # 步骤2：处理中间目录
             self._process_intermediate_directory(intermediate_path, final_output_path)
             
             self.logger.info(
-                "Successfully merged all rules",
+                "所有规则合并成功",
                 extra={
                     "intermediate_path": intermediate_path,
                     "final_output_path": final_output_path
@@ -35,7 +35,7 @@ class RuleMerger:
             )
         except Exception as e:
             self.logger.error(
-                "Failed to merge rules",
+                "合并规则失败",
                 extra={
                     "intermediate_path": intermediate_path,
                     "final_output_path": final_output_path,
@@ -46,55 +46,55 @@ class RuleMerger:
     
     def _prepare_workspace(self, final_output_path: str) -> None:
         """
-        Prepare the workspace by cleaning and creating the final output directory.
+        通过清理和创建最终输出目录来准备工作空间。
         
         Args:
-            final_output_path (str): Path to the final output directory
+            final_output_path (str): 最终输出目录路径
         """
         if os.path.exists(final_output_path):
             shutil.rmtree(final_output_path)
         os.makedirs(final_output_path)
-        self.logger.debug(f"Cleaned and created final output directory: {final_output_path}")
+        self.logger.debug(f"已清理并创建最终输出目录: {final_output_path}")
     
     def _process_intermediate_directory(self, intermediate_path: str, final_output_path: str) -> None:
         """
-        Process the intermediate directory and merge rules.
+        处理中间目录并合并规则。
         
         Args:
-            intermediate_path (str): Path to the intermediate files directory
-            final_output_path (str): Path to the final output directory
+            intermediate_path (str): 中间文件目录路径
+            final_output_path (str): 最终输出目录路径
         """
-        # Walk through the intermediate directory structure
+        # 遍历中间目录结构
         for root, dirs, files in os.walk(intermediate_path):
-            # Skip if no files in this directory
+            # 如果此目录中没有文件则跳过
             if not files:
                 continue
             
-            # Determine policy and content type from directory structure
+            # 从目录结构确定策略和内容类型
             rel_path = os.path.relpath(root, intermediate_path)
             path_parts = rel_path.split(os.sep)
             
-            # We expect path structure like: policy/content_type
+            # 我们期望的路径结构为: policy/content_type
             if len(path_parts) != 2:
                 continue
                 
             policy, content_type = path_parts
             
-            # Merge rules in this directory
+            # 合并此目录中的规则
             self._merge_directory_rules(root, policy, content_type, final_output_path)
     
     def _merge_directory_rules(self, directory_path: str, policy: str, content_type: str, final_output_path: str) -> None:
         """
-        Merge all rules in a specific directory.
+        合并特定目录中的所有规则。
         
         Args:
-            directory_path (str): Path to the directory containing rule files
-            policy (str): Policy name
-            content_type (str): Content type (domain, ipcidr, etc.)
-            final_output_path (str): Path to the final output directory
+            directory_path (str): 包含规则文件的目录路径
+            policy (str): 策略名称
+            content_type (str): 内容类型 (domain, ipcidr等)
+            final_output_path (str): 最终输出目录路径
         """
         try:
-            # Step 1: Collect all rules from .list files
+            # 步骤1：从.list文件收集所有规则
             final_rules: Set[str] = set()
             
             for filename in os.listdir(directory_path):
@@ -106,29 +106,29 @@ class RuleMerger:
                             final_rules.update(lines)
                     except Exception as e:
                         self.logger.warning(
-                            "Failed to read rule file",
+                            "读取规则文件失败",
                             extra={
                                 "rule_file": filepath,
                                 "error": str(e)
                             }
                         )
             
-            # Step 2: Write final rules if not empty
+            # 步骤2：如果非空则写入最终规则
             if final_rules:
-                # Create flat filename based on policy and content_type
-                # Convert to lowercase and replace content_type mapping
+                # 根据策略和内容类型创建平面文件名
+                # 转换为小写并替换内容类型映射
                 policy_lower = policy.lower()
                 if content_type == "domain":
                     output_filename = f"{policy_lower}_domain.txt"
                 elif content_type == "ipcidr":
-                    # Check if we have IPv6 rules in the set
-                    # IPv6 addresses contain ":" but no ".", IPv4 addresses contain "."
+                    # 检查集合中是否有IPv6规则
+                    # IPv6地址包含":"但不包含"."，IPv4地址包含"."
                     has_ipv6 = any(":" in rule and "." not in rule for rule in final_rules)
                     has_ipv4 = any("." in rule for rule in final_rules)
                     
-                    # If we have both IPv4 and IPv6 rules, create separate files
+                    # 如果我们同时有IPv4和IPv6规则，则创建单独的文件
                     if has_ipv6 and has_ipv4:
-                        # Create IPv4 file
+                        # 创建IPv4文件
                         ipv4_rules = {rule for rule in final_rules if "." in rule}
                         if ipv4_rules:
                             output_filename = f"{policy_lower}_ipv4.txt"
@@ -137,7 +137,7 @@ class RuleMerger:
                                 with open(output_filepath, 'w', encoding='utf-8') as f:
                                     f.write('\n'.join(sorted(list(ipv4_rules))))
                                 self.logger.debug(
-                                    "Merged directory rules (IPv4)",
+                                    "合并目录规则 (IPv4)",
                                     extra={
                                         "policy": policy,
                                         "content_type": content_type,
@@ -147,7 +147,7 @@ class RuleMerger:
                                 )
                             except Exception as e:
                                 self.logger.error(
-                                    "Failed to write final rule file (IPv4)",
+                                    "写入最终规则文件失败 (IPv4)",
                                     extra={
                                         "output_file": output_filepath,
                                         "error": str(e)
@@ -155,7 +155,7 @@ class RuleMerger:
                                 )
                                 raise
                         
-                        # Create IPv6 file
+                        # 创建IPv6文件
                         ipv6_rules = {rule for rule in final_rules if ":" in rule and "." not in rule}
                         if ipv6_rules:
                             output_filename = f"{policy_lower}_ipv6.txt"
@@ -164,7 +164,7 @@ class RuleMerger:
                                 with open(output_filepath, 'w', encoding='utf-8') as f:
                                     f.write('\n'.join(sorted(list(ipv6_rules))))
                                 self.logger.debug(
-                                    "Merged directory rules (IPv6)",
+                                    "合并目录规则 (IPv6)",
                                     extra={
                                         "policy": policy,
                                         "content_type": content_type,
@@ -174,32 +174,32 @@ class RuleMerger:
                                 )
                             except Exception as e:
                                 self.logger.error(
-                                    "Failed to write final rule file (IPv6)",
+                                    "写入最终规则文件失败 (IPv6)",
                                     extra={
                                         "output_file": output_filepath,
                                         "error": str(e)
                                     }
                                 )
                                 raise
-                        # Skip the default write since we've already written separate files
+                        # 跳过默认写入，因为我们已经写入了单独的文件
                         return
                     elif has_ipv6:
-                        # Only IPv6 rules
+                        # 仅IPv6规则
                         output_filename = f"{policy_lower}_ipv6.txt"
                     else:
-                        # Only IPv4 rules
+                        # 仅IPv4规则
                         output_filename = f"{policy_lower}_ipv4.txt"
                 else:
                     output_filename = f"{policy_lower}_{content_type}.txt"
                 
-                # Full output file path
+                # 完整的输出文件路径
                 output_filepath = os.path.join(final_output_path, output_filename)
                 
                 try:
                     with open(output_filepath, 'w', encoding='utf-8') as f:
                         f.write('\n'.join(sorted(list(final_rules))))
                     self.logger.debug(
-                        "Merged directory rules",
+                        "合并目录规则",
                         extra={
                             "policy": policy,
                             "content_type": content_type,
@@ -209,7 +209,7 @@ class RuleMerger:
                     )
                 except Exception as e:
                     self.logger.error(
-                        "Failed to write final rule file",
+                        "写入最终规则文件失败",
                         extra={
                             "output_file": output_filepath,
                             "error": str(e)
@@ -218,7 +218,7 @@ class RuleMerger:
                     raise
         except Exception as e:
             self.logger.error(
-                "Failed to merge directory rules",
+                "合并目录规则失败",
                 extra={
                     "directory_path": directory_path,
                     "policy": policy,

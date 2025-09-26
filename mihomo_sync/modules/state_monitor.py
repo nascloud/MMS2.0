@@ -9,7 +9,7 @@ from mihomo_sync.modules.rule_merger import RuleMerger
 
 
 class StateMonitor:
-    """A monitor that detects changes in Mihomo's state and triggers actions with debounce logic."""
+    """一个监控器，用于检测Mihomo状态的变化并使用去抖动逻辑触发操作。"""
     
     def __init__(self, api_client, mosdns_controller, mosdns_config_path: str, 
                  polling_interval: float, debounce_interval: float,
@@ -17,18 +17,18 @@ class StateMonitor:
                  orchestrator: Optional[RuleGenerationOrchestrator] = None, 
                  merger: Optional[RuleMerger] = None):
         """
-        Initialize the StateMonitor.
+        初始化StateMonitor。
         
         Args:
-            api_client: An instance of MihomoApiClient
-            mosdns_controller: Controller for Mosdns service
-            mosdns_config_path (str): Path to the output directory for Mosdns configuration files
-            polling_interval (float): Time interval between polling in seconds
-            debounce_interval (float): Time to wait before triggering action after change in seconds
-            mihomo_config_parser: Parser for Mihomo local configuration files
-            mihomo_config_path (str): Path to the Mihomo configuration file
-            orchestrator: RuleGenerationOrchestrator instance
-            merger: RuleMerger instance
+            api_client: MihomoApiClient的实例
+            mosdns_controller: Mosdns服务的控制器
+            mosdns_config_path (str): Mosdns配置文件的输出目录路径
+            polling_interval (float): 轮询时间间隔（秒）
+            debounce_interval (float): 变化后触发操作前的等待时间（秒）
+            mihomo_config_parser: Mihomo本地配置文件的解析器
+            mihomo_config_path (str): Mihomo配置文件的路径
+            orchestrator: RuleGenerationOrchestrator实例
+            merger: RuleMerger实例
         """
         self.api_client = api_client
         self.mosdns_controller = mosdns_controller
@@ -45,23 +45,23 @@ class StateMonitor:
 
     async def _get_state_hash(self) -> str:
         """
-        Get a hash digest representing the current state of Mihomo.
+        获取表示Mihomo当前状态的哈希摘要。
         
         Returns:
-            str: SHA-256 hash of the current state
+            str: 当前状态的SHA-256哈希
         """
         try:
-            # Get proxies and rule providers data
+            # 获取代理和规则提供者数据
             proxies_data = await self.api_client.get_proxies()
             rule_providers_data = await self.api_client.get_rule_providers()
             
-            # Create a state snapshot with only the essential information
+            # 创建仅包含基本信息的状态快照
             state_snapshot = {
                 "proxies": {},
                 "rule_providers": {}
             }
             
-            # Extract proxy information (strategy groups and their current selection)
+            # 提取代理信息（策略组及其当前选择）
             for name, proxy in proxies_data.get("proxies", {}).items():
                 if proxy.get("type") in ["Selector", "Fallback"]:
                     state_snapshot["proxies"][name] = {
@@ -69,22 +69,22 @@ class StateMonitor:
                         "now": proxy.get("now")
                     }
             
-            # Extract rule provider information (name and update time)
+            # 提取规则提供者信息（名称和更新时间）
             for name, provider in rule_providers_data.get("providers", {}).items():
                 state_snapshot["rule_providers"][name] = {
                     "name": name,
                     "updatedAt": provider.get("updatedAt")
                 }
             
-            # Sort the snapshot to ensure consistent hashing
+            # 对快照进行排序以确保一致的哈希
             sorted_snapshot = json.dumps(state_snapshot, sort_keys=True, separators=(',', ':'))
             
-            # Generate SHA-256 hash
+            # 生成SHA-256哈希
             return hashlib.sha256(sorted_snapshot.encode('utf-8')).hexdigest()
             
         except Exception as e:
             self.logger.error(
-                "Failed to get state hash",
+                "获取状态哈希失败",
                 extra={
                     "error": str(e)
                 }
@@ -92,25 +92,25 @@ class StateMonitor:
             raise
 
     async def start(self):
-        """Start the monitoring loop."""
-        self.logger.info("Starting state monitor")
+        """启动监控循环。"""
+        self.logger.info("正在启动状态监控器")
         
         while True:
             try:
-                # Get current state hash
+                # 获取当前状态哈希
                 current_state_hash = await self._get_state_hash()
                 
-                # Compare with previous state
+                # 与之前的状态进行比较
                 if self._last_state_hash is not None and current_state_hash != self._last_state_hash:
                     self.logger.info(
-                        "State change detected",
+                        "检测到状态变化",
                         extra={
                             "previous_hash": self._last_state_hash,
                             "current_hash": current_state_hash
                         }
                     )
                     
-                    # Cancel any existing debounce task
+                    # 取消任何现有的去抖动任务
                     if self._debounce_task and not self._debounce_task.done():
                         self._debounce_task.cancel()
                         try:
@@ -118,61 +118,61 @@ class StateMonitor:
                         except asyncio.CancelledError:
                             pass
                     
-                    # Create a new debounce task
+                    # 创建新的去抖动任务
                     self._debounce_task = asyncio.create_task(self._debounce_and_trigger())
                 
-                # Update last state hash
+                # 更新最后状态哈希
                 self._last_state_hash = current_state_hash
                 
-                # Wait for the next polling interval
+                # 等待下一个轮询间隔
                 await asyncio.sleep(self.polling_interval)
                 
             except Exception as e:
                 self.logger.error(
-                    "Error in monitoring loop",
+                    "监控循环中发生错误",
                     extra={
                         "error": str(e)
                 }
             )
-                # Wait before retrying
+                # 等待后重试
                 await asyncio.sleep(self.polling_interval)
 
     async def _debounce_and_trigger(self):
-        """Wait for the debounce interval and then trigger the rule generation process."""
+        """等待去抖动间隔，然后触发规则生成过程。"""
         try:
             await asyncio.sleep(self.debounce_interval)
-            self.logger.info("Debounce period completed, triggering rule generation")
+            self.logger.info("去抖动期完成，正在触发规则生成")
             await self._generate_rules()
         except Exception as e:
             self.logger.error(
-                "Error in debounce trigger",
+                "去抖动触发中发生错误",
                 extra={
                     "error": str(e)
                 }
             )
     
     async def _generate_rules(self):
-        """Generate Mosdns rules based on Mihomo's state using the new two-phase approach."""
+        """使用新的两阶段方法基于Mihomo的状态生成Mosdns规则。"""
         self.logger.info("检测到状态变化，开始执行规则生成流程...")
         try:
-            # Check that required components are available
+            # 检查所需组件是否可用
             if self.orchestrator is None or self.merger is None:
-                self.logger.error("Orchestrator or Merger not initialized")
+                self.logger.error("Orchestrator或Merger未初始化")
                 return
                 
-            # 阶段一：分发。调用 Orchestrator 生成中间文件。
+            # 阶段一：分发。调用Orchestrator生成中间文件。
             self.logger.info("阶段一：正在生成中间规则文件...")
             intermediate_path = await self.orchestrator.run()
             self.logger.info(f"中间文件成功生成于: {intermediate_path}")
 
-            # 阶段二：合并。调用 Merger 生成最终文件。
+            # 阶段二：合并。调用Merger生成最终文件。
             self.logger.info("阶段二：正在合并规则文件...")
             final_path = self.mosdns_config_path
             self.merger.merge_from_intermediate(intermediate_path, final_path)
             self.logger.info(f"最终规则文件成功生成于: {final_path}")
 
-            # 阶段三：重载。通知 Mosdns 应用新规则。
-            self.logger.info("阶段三：正在重载 Mosdns 服务...")
+            # 阶段三：重载。通知Mosdns应用新规则。
+            self.logger.info("阶段三：正在重载Mosdns服务...")
             reload_success = await self.mosdns_controller.reload()
             if reload_success:
                 self.logger.info("规则生成与重载流程全部成功完成！")

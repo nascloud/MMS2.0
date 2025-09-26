@@ -8,20 +8,20 @@ from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
 
 
 class RuleGenerationOrchestrator:
-    """Orchestrator for the dispatch phase of rule generation."""
+    """规则生成分发阶段的协调器。"""
     
     # 定义固定的策略名称
     FIXED_POLICIES = ["DIRECT", "PROXY", "REJECT"]
     
     def __init__(self, api_client, config, mihomo_config_parser=None, mihomo_config_path=""):
         """
-        Initialize the RuleGenerationOrchestrator.
+        初始化RuleGenerationOrchestrator。
         
         Args:
-            api_client: An instance of MihomoApiClient
-            config: ConfigManager instance
-            mihomo_config_parser: MihomoConfigParser instance (optional)
-            mihomo_config_path: Path to Mihomo config file (optional)
+            api_client: MihomoApiClient的实例
+            config: ConfigManager实例
+            mihomo_config_parser: MihomoConfigParser实例（可选）
+            mihomo_config_path: Mihomo配置文件路径（可选）
         """
         self.api_client = api_client
         self.config = config
@@ -33,120 +33,120 @@ class RuleGenerationOrchestrator:
     
     async def run(self) -> str:
         """
-        Execute the complete dispatch phase workflow.
+        执行完整的分发阶段工作流。
         
         Returns:
-            str: Path to the generated intermediate directory
+            str: 生成的中间目录路径
         """
-        self.logger.info("Starting rule generation orchestration...")
+        self.logger.info("正在启动规则生成协调...")
         
-        # Step 1: Prepare workspace
+        # 步骤1：准备工作空间
         self._prepare_workspace()
         
-        # Step 2: Fetch data from API
+        # 步骤2：从API获取数据
         rules_data = await self.api_client.get_rules()
         rule_providers_data = await self.api_client.get_rule_providers()
         proxies_data = await self.api_client.get_proxies()
         
-        # Step 3: Get rule provider info from config file if available
+        # 步骤3：如果可用，从配置文件获取规则提供者信息
         config_provider_info = {}
         if self.mihomo_config_parser and self.mihomo_config_path and os.path.exists(self.mihomo_config_path):
             try:
                 config_data = self.mihomo_config_parser.parse_config_file(self.mihomo_config_path)
                 if config_data:
                     config_provider_info = self.mihomo_config_parser.extract_rule_providers(config_data)
-                    self.logger.debug(f"Loaded {len(config_provider_info)} rule providers from config file")
+                    self.logger.debug(f"从配置文件加载了 {len(config_provider_info)} 个规则提供者")
             except Exception as e:
-                self.logger.warning(f"Failed to load rule providers from config file: {e}")
+                self.logger.warning(f"从配置文件加载规则提供者失败: {e}")
         
-        # Step 4: Merge API and config provider info
-        # Config file info takes precedence over API info
+        # 步骤4：合并API和配置提供者信息
+        # 配置文件信息优先于API信息
         providers_info = rule_providers_data.get("providers", {})
         providers_info.update(config_provider_info)
         
-        # Step 5: Initialize memory aggregator
+        # 步骤5：初始化内存聚合器
         # 初始化固定策略的聚合器
         aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
         
-        # Step 6: Process rules
+        # 步骤6：处理规则
         await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules)
         
-        # Step 7: Write intermediate files
+        # 步骤7：写入中间文件
         self._write_intermediate_files(aggregated_rules)
         
-        self.logger.info(f"Intermediate files successfully generated at: {self.intermediate_dir}")
+        self.logger.info(f"中间文件成功生成于: {self.intermediate_dir}")
         return self.intermediate_dir
     
     def _prepare_workspace(self) -> None:
-        """Prepare the workspace by cleaning and creating the intermediate directory."""
+        """通过清理和创建中间目录来准备工作空间。"""
         if os.path.exists(self.intermediate_dir):
             shutil.rmtree(self.intermediate_dir)
         os.makedirs(self.intermediate_dir)
-        self.logger.debug(f"Cleaned and created intermediate directory: {self.intermediate_dir}")
+        self.logger.debug(f"已清理并创建中间目录: {self.intermediate_dir}")
     
     async def _process_rules(self, rules_data: Dict[str, Any], providers_info: Dict[str, Any], 
                              proxies_data: Dict[str, Any],
                              aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
         """
-        Process all rules and aggregate them in memory.
+        处理所有规则并在内存中聚合它们。
         
         Args:
-            rules_data: Rules data from Mihomo API
-            providers_info: Information about all rule providers (merged from API and config)
-            proxies_data: Proxies data from Mihomo API
-            aggregated_rules: Memory aggregator for rules with fixed policies
+            rules_data: 来自Mihomo API的规则数据
+            providers_info: 所有规则提供者的信息（从API和配置合并）
+            proxies_data: 来自Mihomo API的代理数据
+            aggregated_rules: 用于固定策略的规则内存聚合器
         """
-        # Process each rule
+        # 处理每个规则
         for rule in rules_data.get("rules", []):
             rule_type = rule.get("type", "")
             
             if rule_type.lower() == "ruleset":
-                # Process RULE-SET type rules
+                # 处理RULE-SET类型规则
                 await self._process_rule_set_rule(rule, providers_info, proxies_data, aggregated_rules)
             else:
-                # Process single rules
+                # 处理单个规则
                 self._process_single_rule(rule, proxies_data, aggregated_rules)
     
     async def _process_rule_set_rule(self, rule: Dict[str, Any], providers_info: Dict[str, Any],
                                      proxies_data: Dict[str, Any],
                                      aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
         """
-        Process a RULE-SET type rule.
+        处理RULE-SET类型规则。
         
         Args:
-            rule: The RULE-SET rule to process
-            providers_info: Information about all rule providers
-            proxies_data: Proxies data from Mihomo API
-            aggregated_rules: Memory aggregator for rules with fixed policies
+            rule: 要处理的RULE-SET规则
+            providers_info: 所有规则提供者的信息
+            proxies_data: 来自Mihomo API的代理数据
+            aggregated_rules: 用于固定策略的规则内存聚合器
         """
         try:
             policy = rule.get("proxy") or rule.get("provider", "")
             provider_name = rule.get("payload", "")
             
-            # Skip if no policy or provider name
+            # 如果没有策略或提供者名称则跳过
             if not policy or not provider_name:
-                self.logger.warning(f"Skipping RULE-SET rule with missing policy or provider: {rule}")
+                self.logger.warning(f"跳过缺少策略或提供者的RULE-SET规则: {rule}")
                 return
             
-            # Resolve the final policy using PolicyResolver
+            # 使用PolicyResolver解析最终策略
             resolved_policy = self.policy_resolver.resolve(policy, proxies_data)
             
-            # Only process rules with fixed policies
+            # 仅处理具有固定策略的规则
             if resolved_policy not in self.FIXED_POLICIES:
-                self.logger.debug(f"Skipping RULE-SET rule with non-fixed policy: {resolved_policy}")
+                self.logger.debug(f"跳过具有非固定策略的RULE-SET规则: {resolved_policy}")
                 return
             
-            # Find provider info
+            # 查找提供者信息
             if provider_name not in providers_info:
-                self.logger.warning(f"Provider '{provider_name}' not found in provider info")
+                self.logger.warning(f"在提供者信息中未找到提供者 '{provider_name}'")
                 return
                 
             provider_info = providers_info[provider_name]
             
-            # Fetch and parse ruleset content
+            # 获取和解析规则集内容
             content_list = RuleConverter.fetch_and_parse_ruleset(provider_info)
             
-            # Separate domain and ipcidr rules
+            # 分离域名和ipcidr规则
             domain_rules = set()
             ipcidr_rules = set()
             
@@ -154,71 +154,71 @@ class RuleGenerationOrchestrator:
                 if rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
                     domain_rules.add(rule_item)
                 elif rule_item.startswith(("ip-cidr:", "ip-cidr6:")) or any(c in rule_item for c in [".", ":"]) and "/" in rule_item:
-                    # IP-CIDR rules typically contain "." or ":" and "/"
+                    # IP-CIDR规则通常包含"."或":"和"/"
                     ipcidr_rules.add(rule_item)
                 else:
-                    # Default to domain rules for unknown types
+                    # 对于未知类型默认为域名规则
                     domain_rules.add(rule_item)
             
-            # Add domain rules to aggregator if any
+            # 如果有任何域名规则，则添加到聚合器
             if domain_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault(provider_name, set()).update(domain_rules)
             
-            # Add ipcidr rules to aggregator if any
+            # 如果有任何ipcidr规则，则添加到聚合器
             if ipcidr_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault(provider_name, set()).update(ipcidr_rules)
             
-            self.logger.debug(f"Processed RULE-SET rule: {provider_name} -> {len(domain_rules)} domain rules, {len(ipcidr_rules)} ipcidr rules for policy {resolved_policy}")
+            self.logger.debug(f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipcidr_rules)} 个ipcidr规则，策略为 {resolved_policy}")
         except Exception as e:
-            self.logger.error(f"Error processing RULE-SET rule: {e}", exc_info=True)
+            self.logger.error(f"处理RULE-SET规则时出错: {e}", exc_info=True)
     
     def _process_single_rule(self, rule: Dict[str, Any], proxies_data: Dict[str, Any],
                              aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
         """
-        Process a single rule (not RULE-SET).
+        处理单个规则（非RULE-SET）。
         
         Args:
-            rule: The single rule to process
-            proxies_data: Proxies data from Mihomo API
-            aggregated_rules: Memory aggregator for rules with fixed policies
+            rule: 要处理的单个规则
+            proxies_data: 来自Mihomo API的代理数据
+            aggregated_rules: 用于固定策略的规则内存聚合器
         """
         try:
             policy = rule.get("proxy") or rule.get("provider", "")
             
-            # Skip if no policy
+            # 如果没有策略则跳过
             if not policy:
-                self.logger.warning(f"Skipping single rule with missing policy: {rule}")
+                self.logger.warning(f"跳过缺少策略的单个规则: {rule}")
                 return
             
-            # Resolve the final policy using PolicyResolver
+            # 使用PolicyResolver解析最终策略
             resolved_policy = self.policy_resolver.resolve(policy, proxies_data)
             
-            # Only process rules with fixed policies
+            # 仅处理具有固定策略的规则
             if resolved_policy not in self.FIXED_POLICIES:
-                self.logger.debug(f"Skipping single rule with non-fixed policy: {resolved_policy}")
+                self.logger.debug(f"跳过具有非固定策略的单个规则: {resolved_policy}")
                 return
             
-            # Convert single rule
+            # 转换单个规则
             mosdns_rule, content_type = RuleConverter.convert_single_rule(rule)
             
-            # Skip if conversion failed
+            # 如果转换失败则跳过
             if mosdns_rule is None or content_type is None:
-                self.logger.debug(f"Skipping unsupported rule: {rule}")
+                self.logger.debug(f"跳过不支持的规则: {rule}")
                 return
             
-            # Add to aggregator with special _inline provider name
+            # 使用特殊 _inline 提供者名称添加到聚合器
             aggregated_rules.setdefault(resolved_policy, {}).setdefault(content_type, {}).setdefault("_inline", set()).add(mosdns_rule)
             
-            self.logger.debug(f"Processed single rule: {rule} -> {mosdns_rule} for policy {resolved_policy}")
+            self.logger.debug(f"已处理单个规则: {rule} -> {mosdns_rule}，策略为 {resolved_policy}")
         except Exception as e:
-            self.logger.error(f"Error processing single rule: {e}", exc_info=True)
+            self.logger.error(f"处理单个规则时出错: {e}", exc_info=True)
     
     def _write_intermediate_files(self, aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
         """
-        Write aggregated rules to intermediate files.
+        将聚合的规则写入中间文件。
         
         Args:
-            aggregated_rules: Memory aggregator containing all rules
+            aggregated_rules: 包含所有规则的内存聚合器
         """
         # 确保固定策略文件夹都存在，即使没有规则
         for policy in self.FIXED_POLICIES:
@@ -232,22 +232,22 @@ class RuleGenerationOrchestrator:
                 
             for content_type, providers in types.items():
                 for provider_name, rule_set in providers.items():
-                    # Skip empty rule sets
+                    # 跳过空规则集
                     if not rule_set:
                         continue
                     
-                    # Create target directory
+                    # 创建目标目录
                     target_dir = os.path.join(self.intermediate_dir, policy, content_type)
                     os.makedirs(target_dir, exist_ok=True)
                     
-                    # Determine filename
+                    # 确定文件名
                     filename = f"provider_{provider_name}.list" if provider_name != "_inline" else "_inline_rules.list"
                     filepath = os.path.join(target_dir, filename)
                     
-                    # Write rules to file
+                    # 将规则写入文件
                     try:
                         with open(filepath, 'w', encoding='utf-8') as f:
                             f.write('\n'.join(sorted(list(rule_set))))
-                        self.logger.debug(f"Wrote {len(rule_set)} rules to {filepath}")
+                        self.logger.debug(f"已将 {len(rule_set)} 条规则写入 {filepath}")
                     except Exception as e:
-                        self.logger.error(f"Failed to write intermediate file {filepath}: {e}")
+                        self.logger.error(f"写入中间文件 {filepath} 失败: {e}")

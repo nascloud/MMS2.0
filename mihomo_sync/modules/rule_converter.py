@@ -5,27 +5,27 @@ from typing import Dict, Any, List, Tuple
 
 
 class RuleConverter:
-    """Converter for transforming Mihomo rules to Mosdns format."""
+    """将Mihomo规则转换为Mosdns格式的转换器。"""
     
     @staticmethod
     def convert_single_rule(rule: Dict[str, Any]) -> Tuple[str | None, str | None]:
         """
-        Convert a single Mihomo rule to Mosdns format.
+        转换单个Mihomo规则为Mosdns格式。
         
         Args:
-            rule (dict): A single rule from Mihomo.
+            rule (dict): 来自Mihomo的单个规则。
             
         Returns:
-            tuple: (converted Mosdns format string, content type) or (None, None) if unsupported.
+            tuple: (转换后的Mosdns格式字符串, 内容类型) 或 (None, None) 如果不支持。
         """
         try:
             rule_type = rule.get("type", "")
             rule_payload = rule.get("payload", "")
             
-            # Determine content type based on rule type
+            # 根据规则类型确定内容类型
             content_type = RuleConverter._determine_content_type(rule_type)
             
-            # Convert format
+            # 转换格式
             mosdns_rule = RuleConverter._convert_format(rule_type, rule_payload)
             
             if mosdns_rule:
@@ -34,7 +34,7 @@ class RuleConverter:
                 return None, None
         except Exception as e:
             logging.getLogger(__name__).error(
-                "Failed to convert single rule",
+                "转换单个规则失败",
                 extra={
                     "rule": rule,
                     "error": str(e)
@@ -45,13 +45,13 @@ class RuleConverter:
     @staticmethod
     def fetch_and_parse_ruleset(provider_info: Dict[str, Any]) -> List[str]:
         """
-        Fetch and parse a RULE-SET provider's content.
+        获取并解析RULE-SET提供者的内容。
         
         Args:
-            provider_info (dict): Information about the rule provider.
+            provider_info (dict): 关于规则提供者的信息。
             
         Returns:
-            list: List of rules in Mosdns format.
+            list: Mosdns格式的规则列表。
         """
         try:
             format_type = provider_info.get("format", "text")
@@ -59,15 +59,15 @@ class RuleConverter:
             url = provider_info.get("url", "")
             path = provider_info.get("path", "")
             
-            # Handle mrs format
+            # 处理mrs格式
             if format_type == "mrs":
-                # Convert URL for mrs format
+                # 转换mrs格式的URL
                 if behavior.lower() in ["domain", "ipcidr"]:
                     url = url.replace(".mrs", ".list")
                 elif behavior.lower() == "classical":
                     url = url.replace(".mrs", ".yaml")
             
-            # Process based on behavior (case-insensitive comparison)
+            # 根据行为处理（不区分大小写比较）
             behavior_lower = behavior.lower()
             if behavior_lower == "domain":
                 return RuleConverter._parse_domain_rules(url, path)
@@ -77,7 +77,7 @@ class RuleConverter:
                 return RuleConverter._parse_classical_rules(url, path)
             else:
                 logging.getLogger(__name__).warning(
-                    "Unsupported behavior type",
+                    "不支持的行为类型",
                     extra={
                         "behavior": behavior
                     }
@@ -85,7 +85,7 @@ class RuleConverter:
                 return []
         except Exception as e:
             logging.getLogger(__name__).error(
-                "Failed to fetch and parse ruleset",
+                "获取和解析规则集失败",
                 extra={
                     "provider_info": provider_info,
                     "error": str(e)
@@ -96,15 +96,15 @@ class RuleConverter:
     @staticmethod
     def _determine_content_type(rule_type: str) -> str:
         """
-        Determine content type based on rule type.
+        根据规则类型确定内容类型。
         
         Args:
-            rule_type (str): Type of the rule.
+            rule_type (str): 规则的类型。
             
         Returns:
-            str: Content type (domain, ipv4, ipv6).
+            str: 内容类型 (domain, ipv4, ipv6)。
         """
-        # Determine by rule type
+        # 根据规则类型确定
         domain_types = ["DOMAIN-SUFFIX", "DOMAIN", "DOMAIN-KEYWORD", "DOMAIN-REGEX", "DomainSuffix"]
         ip_types = ["IP-CIDR", "IP-CIDR6", "IPCIDR"]
         
@@ -116,24 +116,24 @@ class RuleConverter:
             else:
                 return "ipv4"
         else:
-            # Default to domain for unknown types
+            # 对于未知类型，默认为domain
             return "domain"
     
     @staticmethod
     def _convert_format(rule_type: str, content: str) -> str:
         """
-        Convert Mihomo rule format to Mosdns format.
+        将Mihomo规则格式转换为Mosdns格式。
         
         Args:
-            rule_type (str): Type of the rule.
-            content (str): Content of the rule.
+            rule_type (str): 规则的类型。
+            content (str): 规则的内容。
             
         Returns:
-            str: Converted Mosdns format rule.
+            str: 转换后的Mosdns格式规则。
         """
-        # Handle special cases for list format wildcards
+        # 处理列表格式通配符的特殊情况
         if rule_type == "DOMAIN-SUFFIX" or rule_type == "DomainSuffix":
-            # Handle wildcards in list format
+            # 处理列表格式的通配符
             if content.startswith("*."):
                 # *.example.com -> domain:example.com
                 content = content[2:]
@@ -150,7 +150,7 @@ class RuleConverter:
                 # * -> keyword:
                 return "keyword:"
             else:
-                # Normal domain suffix
+                # 正常的域名后缀
                 return f"domain:{content}"
         elif rule_type == "DOMAIN":
             return f"full:{content}"
@@ -163,9 +163,9 @@ class RuleConverter:
         elif rule_type == "IP-CIDR6":
             return content  # 直接返回CIDR内容，不带前缀
         else:
-            # For unsupported types, return empty string
+            # 对于不支持的类型，返回空字符串
             logging.getLogger(__name__).warning(
-                "Unsupported rule type for conversion",
+                "不支持的规则类型转换",
                 extra={
                     "rule_type": rule_type,
                     "content": content
@@ -176,17 +176,17 @@ class RuleConverter:
     @staticmethod
     def _parse_domain_rules(url: str, path: str = "") -> List[str]:
         """
-        Parse domain rules from URL or local file path.
+        从URL或本地文件路径解析域名规则。
         
         Args:
-            url (str): URL to download domain rules.
-            path (str): Local file path for domain rules.
+            url (str): 下载域名规则的URL。
+            path (str): 域名规则的本地文件路径。
             
         Returns:
-            list: List of domain rules.
+            list: 域名规则列表。
         """
         try:
-            # If path is provided, read from local file
+            # 如果提供了路径，则从本地文件读取
             if path:
                 if os.path.exists(path):
                     rules = []
@@ -194,7 +194,7 @@ class RuleConverter:
                         for line in f:
                             line = line.strip()
                             if line and not line.startswith('#'):
-                                # Convert to Mosdns format
+                                # 转换为Mosdns格式
                                 if line.startswith("*."):
                                     # *.example.com -> domain:example.com
                                     line = line[2:]
@@ -211,11 +211,11 @@ class RuleConverter:
                                     # * -> keyword:
                                     rules.append("keyword:")
                                 else:
-                                    # Normal domain
+                                    # 正常域名
                                     rules.append(f"domain:{line}")
                     return rules
             
-            # If URL is provided, download and parse
+            # 如果提供了URL，则下载并解析
             if url:
                 try:
                     response = httpx.get(url, timeout=30)
@@ -225,7 +225,7 @@ class RuleConverter:
                     for line in response.text.splitlines():
                         line = line.strip()
                         if line and not line.startswith('#'):
-                            # Convert to Mosdns format
+                            # 转换为Mosdns格式
                             if line.startswith("*."):
                                 # *.example.com -> domain:example.com
                                 line = line[2:]
@@ -242,23 +242,23 @@ class RuleConverter:
                                 # * -> keyword:
                                 rules.append("keyword:")
                             else:
-                                # Normal domain
+                                # 正常域名
                                 rules.append(f"domain:{line}")
                     return rules
                 except Exception as e:
                     logging.getLogger(__name__).error(
-                        "Failed to download domain rules",
+                        "下载域名规则失败",
                         extra={
                             "url": url,
                             "error": str(e)
                         }
                     )
             
-            # Fallback to empty list
+            # 回退到空列表
             return []
         except Exception as e:
             logging.getLogger(__name__).error(
-                "Failed to parse domain rules",
+                "解析域名规则失败",
                 extra={
                     "url": url,
                     "path": path,
@@ -270,17 +270,17 @@ class RuleConverter:
     @staticmethod
     def _parse_ipcidr_rules(url: str, path: str = "") -> List[str]:
         """
-        Parse IPCIDR rules from URL or local file path.
+        从URL或本地文件路径解析IPCIDR规则。
         
         Args:
-            url (str): URL to download IPCIDR rules.
-            path (str): Local file path for IPCIDR rules.
+            url (str): 下载IPCIDR规则的URL。
+            path (str): IPCIDR规则的本地文件路径。
             
         Returns:
-            list: List of IPCIDR rules.
+            list: IPCIDR规则列表。
         """
         try:
-            # If path is provided, read from local file
+            # 如果提供了路径，则从本地文件读取
             if path:
                 if os.path.exists(path):
                     rules = []
@@ -288,11 +288,11 @@ class RuleConverter:
                         for line in f:
                             line = line.strip()
                             if line and not line.startswith('#'):
-                                # Just add the line directly without prefix
+                                # 直接添加行，不带前缀
                                 rules.append(line)
                     return rules
             
-            # If URL is provided, download and parse
+            # 如果提供了URL，则下载并解析
             if url:
                 try:
                     response = httpx.get(url, timeout=30)
@@ -302,23 +302,23 @@ class RuleConverter:
                     for line in response.text.splitlines():
                         line = line.strip()
                         if line and not line.startswith('#'):
-                            # Just add the line directly without prefix
+                            # 直接添加行，不带前缀
                             rules.append(line)
                     return rules
                 except Exception as e:
                     logging.getLogger(__name__).error(
-                        "Failed to download IPCIDR rules",
+                        "下载IPCIDR规则失败",
                         extra={
                             "url": url,
                             "error": str(e)
                         }
                     )
             
-            # Fallback to empty list
+            # 回退到空列表
             return []
         except Exception as e:
             logging.getLogger(__name__).error(
-                "Failed to parse IPCIDR rules",
+                "解析IPCIDR规则失败",
                 extra={
                     "url": url,
                     "path": path,
@@ -330,17 +330,17 @@ class RuleConverter:
     @staticmethod
     def _parse_classical_rules(url: str, path: str = "") -> List[str]:
         """
-        Parse classical rules from URL or local file path.
+        从URL或本地文件路径解析经典规则。
         
         Args:
-            url (str): URL to download classical rules.
-            path (str): Local file path for classical rules.
+            url (str): 下载经典规则的URL。
+            path (str): 经典规则的本地文件路径。
             
         Returns:
-            list: List of classical rules.
+            list: 经典规则列表。
         """
         try:
-            # If path is provided, read from local file
+            # 如果提供了路径，则从本地文件读取
             if path:
                 if os.path.exists(path):
                     rules = []
@@ -348,7 +348,7 @@ class RuleConverter:
                         for line in f:
                             line = line.strip()
                             if line and not line.startswith('#'):
-                                # Parse classical rule format (DOMAIN-SUFFIX,example.com)
+                                # 解析经典规则格式 (DOMAIN-SUFFIX,example.com)
                                 if line.startswith("DOMAIN-SUFFIX,"):
                                     domain = line.split(",", 1)[1]
                                     rules.append(f"domain:{domain}")
@@ -363,15 +363,15 @@ class RuleConverter:
                                     rules.append(f"regexp:{regex}")
                                 elif line.startswith("IP-CIDR,"):
                                     cidr = line.split(",", 1)[1]
-                                    # Add CIDR directly without prefix
+                                    # 直接添加CIDR，不带前缀
                                     rules.append(cidr)
                                 elif line.startswith("IP-CIDR6,"):
                                     cidr6 = line.split(",", 1)[1]
-                                    # Add CIDR directly without prefix
+                                    # 直接添加CIDR，不带前缀
                                     rules.append(cidr6)
                     return rules
             
-            # If URL is provided, download and parse
+            # 如果提供了URL，则下载并解析
             if url:
                 try:
                     response = httpx.get(url, timeout=30)
@@ -381,7 +381,7 @@ class RuleConverter:
                     for line in response.text.splitlines():
                         line = line.strip()
                         if line and not line.startswith('#'):
-                            # Parse classical rule format (DOMAIN-SUFFIX,example.com)
+                            # 解析经典规则格式 (DOMAIN-SUFFIX,example.com)
                             if line.startswith("DOMAIN-SUFFIX,"):
                                 domain = line.split(",", 1)[1]
                                 rules.append(f"domain:{domain}")
@@ -396,27 +396,27 @@ class RuleConverter:
                                 rules.append(f"regexp:{regex}")
                             elif line.startswith("IP-CIDR,"):
                                 cidr = line.split(",", 1)[1]
-                                # Add CIDR directly without prefix
+                                # 直接添加CIDR，不带前缀
                                 rules.append(cidr)
                             elif line.startswith("IP-CIDR6,"):
                                 cidr6 = line.split(",", 1)[1]
-                                # Add CIDR directly without prefix
+                                # 直接添加CIDR，不带前缀
                                 rules.append(cidr6)
                     return rules
                 except Exception as e:
                     logging.getLogger(__name__).error(
-                        "Failed to download classical rules",
+                        "下载经典规则失败",
                         extra={
                             "url": url,
                             "error": str(e)
                         }
                     )
             
-            # Fallback to empty list
+            # 回退到空列表
             return []
         except Exception as e:
             logging.getLogger(__name__).error(
-                "Failed to parse classical rules",
+                "解析经典规则失败",
                 extra={
                     "url": url,
                     "path": path,

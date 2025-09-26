@@ -3,26 +3,26 @@ from typing import Dict, Any, List
 
 
 class RuleParser:
-    """Parser for Mihomo API response data, extracting rules, proxies, and rule providers information."""
+    """Mihomo API响应数据的解析器，提取规则、代理和规则提供者信息。"""
     
     def __init__(self):
-        """Initialize the RuleParser."""
+        """初始化RuleParser。"""
         self.logger = logging.getLogger(__name__)
     
     def parse_rules(self, rules_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         """
-        Parse rules data from Mihomo API.
+        解析来自Mihomo API的规则数据。
         
         Args:
-            rules_data (dict): Rules data from the API.
+            rules_data (dict): 来自API的规则数据。
             
         Returns:
-            list: List of parsed rules.
+            list: 解析后的规则列表。
         """
         try:
             rules = rules_data.get("rules", [])
             self.logger.debug(
-                "Parsed rules data",
+                "解析规则数据",
                 extra={
                     "rules_count": len(rules)
                 }
@@ -30,7 +30,7 @@ class RuleParser:
             return rules
         except Exception as e:
             self.logger.error(
-                "Failed to parse rules data",
+                "解析规则数据失败",
                 extra={
                     "error": str(e)
                 }
@@ -39,18 +39,18 @@ class RuleParser:
     
     def parse_proxies(self, proxies_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Parse proxies data from Mihomo API.
+        解析来自Mihomo API的代理数据。
         
         Args:
-            proxies_data (dict): Proxies data from the API.
+            proxies_data (dict): 来自API的代理数据。
             
         Returns:
-            dict: Parsed proxies data.
+            dict: 解析后的代理数据。
         """
         try:
             proxies = proxies_data.get("proxies", {})
             self.logger.debug(
-                "Parsed proxies data",
+                "解析代理数据",
                 extra={
                     "proxies_count": len(proxies)
                 }
@@ -58,7 +58,7 @@ class RuleParser:
             return proxies
         except Exception as e:
             self.logger.error(
-                "Failed to parse proxies data",
+                "解析代理数据失败",
                 extra={
                     "error": str(e)
                 }
@@ -67,18 +67,18 @@ class RuleParser:
     
     def parse_rule_providers(self, rule_providers_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Parse rule providers data from Mihomo API.
+        解析来自Mihomo API的规则提供者数据。
         
         Args:
-            rule_providers_data (dict): Rule providers data from the API.
+            rule_providers_data (dict): 来自API的规则提供者数据。
             
         Returns:
-            dict: Parsed rule providers data.
+            dict: 解析后的规则提供者数据。
         """
         try:
             providers = rule_providers_data.get("providers", {})
             self.logger.debug(
-                "Parsed rule providers data",
+                "解析规则提供者数据",
                 extra={
                     "providers_count": len(providers)
                 }
@@ -86,7 +86,7 @@ class RuleParser:
             return providers
         except Exception as e:
             self.logger.error(
-                "Failed to parse rule providers data",
+                "解析规则提供者数据失败",
                 extra={
                     "error": str(e)
                 }
@@ -95,18 +95,18 @@ class RuleParser:
     
     def parse_rule_provider_info(self, config_data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Parse rule provider information from config data.
+        从配置数据中解析规则提供者信息。
         
         Args:
-            config_data (dict): Configuration data from the API.
+            config_data (dict): 来自API的配置数据。
             
         Returns:
-            dict: Parsed rule provider information with provider name as key.
+            dict: 解析后的规则提供者信息，以提供者名称为键。
         """
         try:
             rule_providers_info = config_data.get("rule-providers", {})
             self.logger.debug(
-                "Parsed rule provider info from config",
+                "从配置中解析规则提供者信息",
                 extra={
                     "providers_info_count": len(rule_providers_info)
                 }
@@ -114,7 +114,7 @@ class RuleParser:
             return rule_providers_info
         except Exception as e:
             self.logger.error(
-                "Failed to parse rule provider info from config",
+                "从配置中解析规则提供者信息失败",
                 extra={
                     "error": str(e)
                 }
