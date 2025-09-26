@@ -12,6 +12,7 @@
 - **容器化部署**: 提供 Docker 镜像便于部署
 - **原子化操作**: 配置文件写入和重载操作保证原子性
 - **规则集支持**: 支持解析 Mihomo 的 rule-providers 规则集
+- **两阶段架构**: 采用分发-合并的两阶段规则生成架构，提高可维护性和可调试性
 
 ## 工作原理
 
@@ -20,7 +21,9 @@
 1. **定时轮询**: 以固定间隔轮询 Mihomo API 获取策略状态
 2. **深度比对**: 通过哈希摘要比对精确检测状态变化
 3. **防抖处理**: 使用防抖机制平滑处理连续变化
-4. **规则生成**: 生成对应的 Mosdns 规则文件
+4. **规则生成**: 采用两阶段架构生成对应的 Mosdns 规则文件
+   - **阶段一（分发）**: RuleGenerationOrchestrator 从 Mihomo API 获取数据并生成结构化的中间文件
+   - **阶段二（合并）**: RuleMerger 读取中间文件，合并去重生成最终规则文件
 5. **原子写入**: 原子化写入配置文件确保完整性
 6. **服务重载**: 安全地重载 Mosdns 服务应用新规则
 
@@ -174,11 +177,12 @@ mihomo_sync/
     ├── api_client.py      # Mihomo API 客户端
     ├── policy_resolver.py # 策略解析器
     ├── state_monitor.py   # 状态监视器
-    ├── mosdns_controller.py # Mosdns 控制器和规则生成器
+    ├── mosdns_controller.py # Mosdns 控制器
     ├── mihomo_config_parser.py # Mihomo 配置文件解析器
     ├── rule_parser.py     # 规则解析器
     ├── rule_converter.py  # 规则转换器
-    └── rule_merger.py     # 规则合并器
+    ├── rule_generation_orchestrator.py # 规则生成协调器（第一阶段）
+    └── rule_merger.py     # 规则合并器（第二阶段）
 ```
 
 ### 本地运行
@@ -190,3 +194,7 @@ pip install -e .
 # 运行服务
 python main.py
 ```
+
+### 文档
+
+详细的模块文档请查看 [docs/模板文档索引.md](docs/模板文档索引.md) 和 [docs/MihomoMosdns动态同步器开发文档.md](docs/MihomoMosdns动态同步器开发文档.md)。

@@ -205,3 +205,31 @@ rules:
 仅支持关于 `目标IP` 的规则
 
 将 `目标IP` 匹配转为 `来源IP` 匹配
+
+## 规则处理说明
+
+### Mihomo 到 MosDNS 的转换
+
+Mihomo-Mosdns 同步器会将 Mihomo 规则转换为 MosDNS 可识别的格式：
+
+1. **DOMAIN-SUFFIX 规则**：转换为 `domain:example.com` 格式
+2. **DOMAIN 规则**：转换为 `full:example.com` 格式
+3. **DOMAIN-KEYWORD 规则**：转换为 `keyword:example` 格式
+4. **DOMAIN-REGEX 规则**：转换为 `regexp:pattern` 格式
+5. **IP-CIDR/IP-CIDR6 规则**：直接使用 CIDR 格式，不添加前缀
+
+### Rule-Set 处理
+
+Rule-Set 规则会根据 rule-providers 的配置进行处理：
+
+1. **behavior: domain**：处理为域名规则
+2. **behavior: ipcidr**：处理为 IP 规则
+3. **behavior: classical**：处理为经典规则格式
+
+### 策略解析
+
+规则的最终策略会通过 PolicyResolver 解析：
+- DIRECT：直连策略
+- PROXY：代理策略
+- REJECT：拒绝策略
+- 其他策略会解析为以上三种之一

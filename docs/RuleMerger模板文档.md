@@ -21,13 +21,19 @@ RuleMerger（规则合并器）是 Mihomo-Mosdns 同步系统中两阶段生成�
      - 读取每个文件的所有行，并使用集合的 update 方法将它们全部添加到规则集合中
      - 集合会自动处理所有跨文件的重复规则
 
-4. **写入最终文件**：
-   - 当一个子目录下的所有文件都处理完毕后，如果规则集合不为空：
-     - 在最终输出目录下创建对应的策略目录
-     - 将规则集合的内容排序后，一次性写入到最终的文件中
-     - 文件命名格式：`{content_type}.list`
+4. **IPv4/IPv6 分离处理**：
+   - 对于 ipcidr 类型的规则，自动检测是否包含 IPv4 和 IPv6 规则
+   - 如果同时包含 IPv4 和 IPv6 规则，分别创建独立的文件
+   - IPv4 规则包含 "." 字符，IPv6 规则包含 ":" 字符但不包含 "."
 
-5. **错误处理**：
+5. **写入最终文件**：
+   - 当一个子目录下的所有文件都处理完毕后，如果规则集合不为空：
+     - 将规则集合的内容排序后，一次性写入到最终的文件中
+     - 文件命名格式根据策略和内容类型动态生成：
+       - domain 类型：`{policy}_domain.txt`
+       - ipcidr 类型：`{policy}_ipv4.txt` 或 `{policy}_ipv6.txt` 或分别生成两个文件
+
+6. **错误处理**：
    - 在读取单个文件失败时记录警告日志并继续处理其他文件
    - 在写入文件失败时记录错误日志并抛出异常
 
@@ -59,7 +65,7 @@ RuleMerger（规则合并器）是 Mihomo-Mosdns 同步系统中两阶段生成�
 |--------|------|------|------|
 | directory_path | str | 是 | 包含规则文件的目录路径 |
 | policy | str | 是 | 策略名称（PROXY、DIRECT、REJECT等） |
-| content_type | str | 是 | 内容类型（domain、ipv4、ipv6） |
+| content_type | str | 是 | 内容类型（domain、ipcidr） |
 | final_output_path | str | 是 | 最终输出目录路径 |
 
 ## 输出参数
@@ -73,19 +79,17 @@ RuleMerger（规则合并器）是 Mihomo-Mosdns 同步系统中两阶段生成�
 2. **最终文件生成**：在输出目录中创建以下文件结构：
    ```
    final_output_path/
-   ├── PROXY/
-   │   ├── domain.list
-   │   ├── ipv4.list
-   │   └── ipv6.list
-   ├── DIRECT/
-   │   ├── domain.list
-   │   ├── ipv4.list
-   │   └── ipv6.list
-   └── REJECT/
-       ├── domain.list
-       ├── ipv4.list
-       └── ipv6.list
+   ├── proxy_domain.txt
+   ├── proxy_ipv4.txt
+   ├── proxy_ipv6.txt
+   ├── direct_domain.txt
+   ├── direct_ipv4.txt
+   ├── direct_ipv6.txt
+   ├── reject_domain.txt
+   ├── reject_ipv4.txt
+   └── reject_ipv6.txt
    ```
+   注意：实际生成的文件取决于中间文件的内容，可能不会生成所有文件。
 
 3. **日志记录**：记录规则合并过程中的关键信息和错误。
 

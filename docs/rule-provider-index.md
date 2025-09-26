@@ -58,3 +58,23 @@ rule-providers:
 ## payload
 
 内容，仅 `type` 为 `inline` 时生效
+
+## 配置处理说明
+
+### 本地配置文件解析
+
+Mihomo-Mosdns 同步器会解析 Mihomo 的本地配置文件以获取完整的 rule-providers 定义，包括：
+- URL 地址（用于下载远程规则集）
+- 本地路径（用于读取本地规则集）
+- 格式类型（如 mrs 格式）
+- 行为类型（domain, ipcidr, classical）
+
+### MRS 格式处理
+
+当 rule-provider 配置为 mrs 格式时，同步器会自动转换 URL：
+- behavior 为 domain/ipcidr 时，将 .mrs 后缀替换为 .list
+- behavior 为 classical 时，将 .mrs 后缀替换为 .yaml
+
+### 优先级处理
+
+配置文件中的 rule-providers 信息优先级高于 API 获取的信息，确保本地配置的准确性。

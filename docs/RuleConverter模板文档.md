@@ -15,17 +15,19 @@ RuleConverter（规则转换器）是 Mihomo-Mosdns 同步系统中的纯工具�
 2. **RuleSet 规则处理**：
    - 接收 RuleSet 提供者信息
    - 根据提供者信息判断是从本地文件读取还是从网络下载
+   - 对于 mrs 格式，自动转换 URL 为对应的 list 或 yaml 格式
    - 执行下载或读取操作，获取规则集的原始内容
    - 根据规则集的内容格式（通常是一行一条规则），将其解析为字符串列表
+   - 根据行为类型（domain、ipcidr、classical）和规则内容自动识别规则类型
    - 返回解析后的规则列表
 
 3. **格式转换**：
-   - DOMAIN-SUFFIX → domain:payload
+   - DOMAIN-SUFFIX → domain:payload (处理通配符如 *.example.com, +.example.com, .example.com)
    - DOMAIN → full:payload
    - DOMAIN-KEYWORD → keyword:payload
    - DOMAIN-REGEX → regexp:payload
-   - IP-CIDR → ip-cidr:payload
-   - IP-CIDR6 → ip-cidr6:payload
+   - IP-CIDR → payload (直接返回 CIDR 内容，不带前缀)
+   - IP-CIDR6 → payload (直接返回 CIDR 内容，不带前缀)
 
 4. **内容类型判断**：
    - DOMAIN-SUFFIX, DOMAIN, DOMAIN-KEYWORD, DOMAIN-REGEX → domain
@@ -110,4 +112,4 @@ RuleConverter（规则转换器）是 Mihomo-Mosdns 同步系统中的纯工具�
 
 | 返回类型 | 描述 |
 |----------|------|
-| List[str] | 解析后的规则字符串列表 |
+| List[str] | 解析后的规则字符串列表
