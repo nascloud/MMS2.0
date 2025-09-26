@@ -62,17 +62,18 @@ class RuleConverter:
             # Handle mrs format
             if format_type == "mrs":
                 # Convert URL for mrs format
-                if behavior in ["domain", "ipcidr"]:
+                if behavior.lower() in ["domain", "ipcidr"]:
                     url = url.replace(".mrs", ".list")
-                elif behavior == "classical":
+                elif behavior.lower() == "classical":
                     url = url.replace(".mrs", ".yaml")
             
-            # Process based on behavior
-            if behavior == "domain":
+            # Process based on behavior (case-insensitive comparison)
+            behavior_lower = behavior.lower()
+            if behavior_lower == "domain":
                 return RuleConverter._parse_domain_rules(url, path)
-            elif behavior == "ipcidr":
+            elif behavior_lower == "ipcidr":
                 return RuleConverter._parse_ipcidr_rules(url, path)
-            elif behavior == "classical":
+            elif behavior_lower == "classical":
                 return RuleConverter._parse_classical_rules(url, path)
             else:
                 logging.getLogger(__name__).warning(
@@ -198,7 +199,7 @@ class RuleConverter:
                                     # *.example.com -> domain:example.com
                                     line = line[2:]
                                     rules.append(f"domain:{line}")
-                                elif line.startswith("+."):
+                                elif line.startswith("+.") or line.startswith(".+"):
                                     # +.example.com -> domain:example.com
                                     line = line[2:]
                                     rules.append(f"domain:{line}")
@@ -229,7 +230,7 @@ class RuleConverter:
                                 # *.example.com -> domain:example.com
                                 line = line[2:]
                                 rules.append(f"domain:{line}")
-                            elif line.startswith("+."):
+                            elif line.startswith("+.") or line.startswith(".+"):
                                 # +.example.com -> domain:example.com
                                 line = line[2:]
                                 rules.append(f"domain:{line}")

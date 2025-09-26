@@ -68,7 +68,9 @@ class MihomoMosdnsSyncService:
             self.rule_merger = RuleMerger()
             self.rule_orchestrator = RuleGenerationOrchestrator(
                 api_client=self.api_client,
-                config=self.config_manager
+                config=self.config_manager,
+                mihomo_config_parser=self.mihomo_config_parser,
+                mihomo_config_path=self.config_manager.get_mihomo_config_path()
             )
             
             # Initialize state monitor with new components

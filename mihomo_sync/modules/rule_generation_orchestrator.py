@@ -4,6 +4,7 @@ import shutil
 from typing import Dict, Any, List, Set, Tuple
 from mihomo_sync.modules.rule_converter import RuleConverter
 from mihomo_sync.modules.policy_resolver import PolicyResolver
+from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
 
 
 class RuleGenerationOrchestrator:
@@ -12,16 +13,20 @@ class RuleGenerationOrchestrator:
     # 定义固定的策略名称
     FIXED_POLICIES = ["DIRECT", "PROXY", "REJECT"]
     
-    def __init__(self, api_client, config):
+    def __init__(self, api_client, config, mihomo_config_parser=None, mihomo_config_path=""):
         """
         Initialize the RuleGenerationOrchestrator.
         
         Args:
             api_client: An instance of MihomoApiClient
             config: ConfigManager instance
+            mihomo_config_parser: MihomoConfigParser instance (optional)
+            mihomo_config_path: Path to Mihomo config file (optional)
         """
         self.api_client = api_client
         self.config = config
+        self.mihomo_config_parser = mihomo_config_parser
+        self.mihomo_config_path = mihomo_config_path
         self.intermediate_dir = self.config.get_mosdns_config_path() + "_intermediate"
         self.logger = logging.getLogger(__name__)
         self.policy_resolver = PolicyResolver()
@@ -43,14 +48,30 @@ class RuleGenerationOrchestrator:
         rule_providers_data = await self.api_client.get_rule_providers()
         proxies_data = await self.api_client.get_proxies()
         
-        # Step 3: Initialize memory aggregator
+        # Step 3: Get rule provider info from config file if available
+        config_provider_info = {}
+        if self.mihomo_config_parser and self.mihomo_config_path and os.path.exists(self.mihomo_config_path):
+            try:
+                config_data = self.mihomo_config_parser.parse_config_file(self.mihomo_config_path)
+                if config_data:
+                    config_provider_info = self.mihomo_config_parser.extract_rule_providers(config_data)
+                    self.logger.debug(f"Loaded {len(config_provider_info)} rule providers from config file")
+            except Exception as e:
+                self.logger.warning(f"Failed to load rule providers from config file: {e}")
+        
+        # Step 4: Merge API and config provider info
+        # Config file info takes precedence over API info
+        providers_info = rule_providers_data.get("providers", {})
+        providers_info.update(config_provider_info)
+        
+        # Step 5: Initialize memory aggregator
         # 初始化固定策略的聚合器
         aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
         
-        # Step 4: Process rules
-        await self._process_rules(rules_data, rule_providers_data, proxies_data, aggregated_rules)
+        # Step 6: Process rules
+        await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules)
         
-        # Step 5: Write intermediate files
+        # Step 7: Write intermediate files
         self._write_intermediate_files(aggregated_rules)
         
         self.logger.info(f"Intermediate files successfully generated at: {self.intermediate_dir}")
@@ -63,7 +84,7 @@ class RuleGenerationOrchestrator:
         os.makedirs(self.intermediate_dir)
         self.logger.debug(f"Cleaned and created intermediate directory: {self.intermediate_dir}")
     
-    async def _process_rules(self, rules_data: Dict[str, Any], rule_providers_data: Dict[str, Any], 
+    async def _process_rules(self, rules_data: Dict[str, Any], providers_info: Dict[str, Any], 
                              proxies_data: Dict[str, Any],
                              aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
         """
@@ -71,18 +92,15 @@ class RuleGenerationOrchestrator:
         
         Args:
             rules_data: Rules data from Mihomo API
-            rule_providers_data: Rule providers data from Mihomo API
+            providers_info: Information about all rule providers (merged from API and config)
             proxies_data: Proxies data from Mihomo API
             aggregated_rules: Memory aggregator for rules with fixed policies
         """
-        # Extract rule providers info
-        providers_info = rule_providers_data.get("providers", {})
-        
         # Process each rule
         for rule in rules_data.get("rules", []):
             rule_type = rule.get("type", "")
             
-            if rule_type == "RULE-SET":
+            if rule_type.lower() == "ruleset":
                 # Process RULE-SET type rules
                 await self._process_rule_set_rule(rule, providers_info, proxies_data, aggregated_rules)
             else:
@@ -130,7 +148,7 @@ class RuleGenerationOrchestrator:
             
             # Determine content type based on provider behavior
             behavior = provider_info.get("behavior", "domain")
-            content_type = "domain" if behavior == "domain" else "ipcidr" if behavior == "ipcidr" else "domain"
+            content_type = "domain" if behavior.lower() == "domain" else "ipcidr" if behavior.lower() == "ipcidr" else "domain"
             
             # Add to aggregator
             aggregated_rules.setdefault(resolved_policy, {}).setdefault(content_type, {}).setdefault(provider_name, set()).update(content_list)
