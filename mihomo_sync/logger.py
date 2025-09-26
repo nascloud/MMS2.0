@@ -2,6 +2,8 @@ import logging
 from pythonjsonlogger.json import JsonFormatter
 import sys
 import json
+import os
+from datetime import datetime
 
 
 class ChineseJsonFormatter(JsonFormatter):
@@ -21,11 +23,25 @@ class ChineseJsonFormatter(JsonFormatter):
         # 将英文日志级别转换为中文
         if hasattr(record, 'levelname') and record.levelname in self.LEVEL_CHINESE:
             record.levelname = self.LEVEL_CHINESE[record.levelname]
+        
+        # 添加进程ID和线程信息
+        if not hasattr(record, 'pid'):
+            record.pid = os.getpid()
+            
+        # 添加时间戳（毫秒级）
+        if hasattr(record, 'asctime'):
+            # 解析原始时间并添加毫秒
+            try:
+                dt = datetime.strptime(record.asctime, "%Y-%m-%d %H:%M:%S,%f")
+                record.timestamp_ms = int(dt.timestamp() * 1000)
+            except:
+                record.timestamp_ms = int(datetime.now().timestamp() * 1000)
+        
         return super().format(record)
     
     def serialize_log_record(self, log_record):
         """重写序列化方法，确保中文正确显示"""
-        return json.dumps(log_record, ensure_ascii=False)
+        return json.dumps(log_record, ensure_ascii=False, separators=(',', ':'))
 
 
 def setup_logger(log_level='INFO'):
@@ -38,14 +54,28 @@ def setup_logger(log_level='INFO'):
     # 获取根记录器
     root_logger = logging.getLogger()
     
+    # 清除现有处理器
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+        handler.close()
+    
     # 设置日志级别
     root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     
     # 创建带有附加字段的自定义JSON格式化器，用于结构化日志记录
     json_formatter = ChineseJsonFormatter(
-        '%(asctime)s %(name)s %(levelname)s %(message)s',
-        rename_fields={'asctime': '时间', 'name': '模块', 'levelname': '级别'},
-        static_fields={'服务名称': 'mihomo-mosdns-sync'}
+        '%(asctime)s %(name)s %(levelname)s %(message)s %(filename)s %(lineno)d',
+        rename_fields={
+            'asctime': '时间', 
+            'name': '模块', 
+            'levelname': '级别',
+            'filename': '文件',
+            'lineno': '行号'
+        },
+        static_fields={
+            '服务名称': 'mihomo-mosdns-sync',
+            '版本': '2.0'
+        }
     )
     
     # 创建一个将输出到stdout的流处理器
@@ -53,5 +83,4 @@ def setup_logger(log_level='INFO'):
     stream_handler.setFormatter(json_formatter)
     
     # 将处理器添加到根记录器
-    if not root_logger.handlers:
-        root_logger.addHandler(stream_handler)
+    root_logger.addHandler(stream_handler)

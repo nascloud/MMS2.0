@@ -7,6 +7,7 @@ import logging
 import os
 import signal
 import sys
+import time
 from typing import Optional
 from mihomo_sync.logger import setup_logger
 from mihomo_sync.config import ConfigManager
@@ -32,10 +33,12 @@ class MihomoMosdnsSyncService:
         self.rule_orchestrator: Optional[RuleGenerationOrchestrator] = None
         self.rule_merger: Optional[RuleMerger] = None
         self.shutdown_event = asyncio.Event()
+        self.start_time = None
 
     async def initialize(self):
         """初始化服务的所有组件。"""
         self.logger.info("正在初始化Mihomo-Mosdns同步服务")
+        self.start_time = time.time()
         
         try:
             # 加载配置
@@ -48,6 +51,14 @@ class MihomoMosdnsSyncService:
             # 在setup_logger调用后重新初始化记录器
             self.logger = logging.getLogger(__name__)
             
+            self.logger.info(
+                "配置加载完成",
+                extra={
+                    "config_path": config_path,
+                    "log_level": self.config_manager.get_log_level()
+                }
+            )
+            
             # 初始化Mihomo配置解析器
             self.mihomo_config_parser = MihomoConfigParser()
             
@@ -59,9 +70,24 @@ class MihomoMosdnsSyncService:
                 api_secret=self.config_manager.get_mihomo_api_secret()
             )
             
+            self.logger.debug(
+                "API客户端初始化完成",
+                extra={
+                    "api_url": self.config_manager.get_mihomo_api_url(),
+                    "timeout": self.config_manager.get_mihomo_api_timeout()
+                }
+            )
+            
             # 初始化Mosdns控制器
             self.mosdns_controller = MosdnsServiceController(
                 reload_command=self.config_manager.get_mosdns_reload_command()
+            )
+            
+            self.logger.debug(
+                "Mosdns控制器初始化完成",
+                extra={
+                    "reload_command": self.config_manager.get_mosdns_reload_command()
+                }
             )
             
             # 初始化新的规则处理组件
@@ -72,6 +98,8 @@ class MihomoMosdnsSyncService:
                 mihomo_config_parser=self.mihomo_config_parser,
                 mihomo_config_path=self.config_manager.get_mihomo_config_path()
             )
+            
+            self.logger.debug("规则处理组件初始化完成")
             
             # 使用新组件初始化状态监控器
             self.state_monitor = StateMonitor(
@@ -86,9 +114,29 @@ class MihomoMosdnsSyncService:
                 merger=self.rule_merger
             )
             
-            self.logger.info("服务初始化完成")
+            self.logger.debug(
+                "状态监控器初始化完成",
+                extra={
+                    "polling_interval": self.config_manager.get_polling_interval(),
+                    "debounce_interval": self.config_manager.get_debounce_interval()
+                }
+            )
+            
+            init_duration = time.time() - self.start_time
+            self.logger.info(
+                "服务初始化完成",
+                extra={
+                    "初始化耗时_秒": round(init_duration, 3)
+                }
+            )
         except Exception as e:
-            self.logger.exception("服务初始化期间发生错误")
+            self.logger.exception(
+                "服务初始化期间发生错误",
+                extra={
+                    "error_type": type(e).__name__,
+                    "error_message": str(e)
+                }
+            )
             raise
 
     async def health_check(self):
@@ -99,6 +147,7 @@ class MihomoMosdnsSyncService:
             bool: 如果所有健康检查通过返回True，否则返回False
         """
         self.logger.info("正在执行健康检查")
+        health_start_time = time.time()
         
         # 检查Mihomo API连接性
         if self.api_client is None:
@@ -120,7 +169,8 @@ class MihomoMosdnsSyncService:
             self.logger.critical(
                 "健康检查失败：API连接性检查期间发生异常",
                 extra={
-                    "error": str(e)
+                    "error": str(e),
+                    "error_type": type(e).__name__
                 }
             )
             return False
@@ -161,24 +211,36 @@ class MihomoMosdnsSyncService:
         mihomo_config_path = self.config_manager.get_mihomo_config_path()
         if mihomo_config_path:
             if not os.path.exists(mihomo_config_path):
-                self.logger.critical(
-                    "健康检查失败：Mihomo配置文件不存在",
+                self.logger.warning(
+                    "Mihomo配置文件不存在（这可能不是问题，如果完全依赖API）",
                     extra={
                         "config_path": mihomo_config_path
                     }
                 )
-                return False
-            self.logger.info(
-                "Mihomo配置文件检查通过",
-                extra={
-                    "config_path": mihomo_config_path
-                }
-            )
+            else:
+                self.logger.info(
+                    "Mihomo配置文件检查通过",
+                    extra={
+                        "config_path": mihomo_config_path
+                    }
+                )
+        
+        health_duration = time.time() - health_start_time
+        self.logger.info(
+            "健康检查完成",
+            extra={
+                "检查耗时_秒": round(health_duration, 3),
+                "结果": "通过"
+            }
+        )
         
         return True
 
     async def start(self):
         """启动同步服务。"""
+        start_time = time.time()
+        self.logger.info("正在启动同步服务")
+        
         try:
             # 初始化服务
             await self.initialize()
@@ -212,13 +274,21 @@ class MihomoMosdnsSyncService:
             self.logger.critical(
                 "主服务中未处理的异常",
                 extra={
-                    "error": str(e)
+                    "error": str(e),
+                    "error_type": type(e).__name__
                 },
                 exc_info=True
             )
             return 1
         finally:
             await self.cleanup()
+            total_duration = time.time() - start_time
+            self.logger.info(
+                "服务运行结束",
+                extra={
+                    "总运行时间_秒": round(total_duration, 3)
+                }
+            )
         
         return 0
 
@@ -230,18 +300,32 @@ class MihomoMosdnsSyncService:
             signum: 信号编号
         """
         signame = signal.Signals(signum).name
-        self.logger.info(f"收到信号 {signame}，正在启动关闭程序")
+        self.logger.info(
+            f"收到信号 {signame}，正在启动关闭程序",
+            extra={
+                "信号": signame,
+                "信号编号": signum
+            }
+        )
         self.shutdown_event.set()
 
     async def cleanup(self):
         """清理资源。"""
         self.logger.info("正在清理资源")
+        cleanup_start_time = time.time()
         
         # 关闭API客户端
         if self.api_client:
             await self.api_client.close()
+            self.logger.debug("API客户端已关闭")
         
-        self.logger.info("清理完成")
+        cleanup_duration = time.time() - cleanup_start_time
+        self.logger.info(
+            "清理完成",
+            extra={
+                "清理耗时_秒": round(cleanup_duration, 3)
+            }
+        )
 
 
 async def main():

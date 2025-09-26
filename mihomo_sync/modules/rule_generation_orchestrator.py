@@ -1,6 +1,7 @@
 import logging
 import os
 import shutil
+import time
 from typing import Dict, Any, List, Set, Tuple
 from mihomo_sync.modules.rule_converter import RuleConverter
 from mihomo_sync.modules.policy_resolver import PolicyResolver
@@ -30,6 +31,13 @@ class RuleGenerationOrchestrator:
         self.intermediate_dir = self.config.get_mosdns_config_path() + "_intermediate"
         self.logger = logging.getLogger(__name__)
         self.policy_resolver = PolicyResolver()
+        self.logger.debug(
+            "规则生成协调器初始化完成",
+            extra={
+                "intermediate_dir": self.intermediate_dir,
+                "mihomo_config_path": mihomo_config_path
+            }
+        )
     
     async def run(self) -> str:
         """
@@ -39,50 +47,200 @@ class RuleGenerationOrchestrator:
             str: 生成的中间目录路径
         """
         self.logger.info("正在启动规则生成协调...")
+        start_time = time.time()
         
-        # 步骤1：准备工作空间
-        self._prepare_workspace()
+        try:
+            # 步骤1：准备工作空间
+            self._prepare_workspace()
+            
+            # 步骤2：从API获取数据
+            self.logger.debug("正在从API获取数据...")
+            api_start_time = time.time()
+            
+            rules_data = await self.api_client.get_rules()
+            rule_providers_data = await self.api_client.get_rule_providers()
+            proxies_data = await self.api_client.get_proxies()
+            
+            api_duration = time.time() - api_start_time
+            self.logger.debug(
+                "API数据获取完成",
+                extra={
+                    "获取耗时_秒": round(api_duration, 3),
+                    "规则数量": len(rules_data.get("rules", [])),
+                    "提供者数量": len(rule_providers_data.get("providers", {})),
+                    "代理数量": len(proxies_data.get("proxies", {}))
+                }
+            )
+            
+            # 步骤3：如果可用，从配置文件获取规则提供者信息
+            config_provider_info = {}
+            config_duration = 0
+            if self.mihomo_config_parser and self.mihomo_config_path and os.path.exists(self.mihomo_config_path):
+                try:
+                    self.logger.debug("正在从配置文件获取规则提供者信息...")
+                    config_start_time = time.time()
+                    config_data = self.mihomo_config_parser.parse_config_file(self.mihomo_config_path)
+                    if config_data:
+                        config_provider_info = self.mihomo_config_parser.extract_rule_providers(config_data)
+                        config_duration = time.time() - config_start_time
+                        self.logger.debug(
+                            f"从配置文件加载了 {len(config_provider_info)} 个规则提供者",
+                            extra={
+                                "加载耗时_秒": round(config_duration, 3)
+                            }
+                        )
+                except Exception as e:
+                    self.logger.warning(
+                        f"从配置文件加载规则提供者失败: {e}",
+                        extra={
+                            "error": str(e),
+                            "error_type": type(e).__name__
+                        }
+                    )
+            else:
+                self.logger.debug("未提供配置文件或文件不存在，跳过配置文件解析")
         
-        # 步骤2：从API获取数据
-        rules_data = await self.api_client.get_rules()
-        rule_providers_data = await self.api_client.get_rule_providers()
-        proxies_data = await self.api_client.get_proxies()
-        
-        # 步骤3：如果可用，从配置文件获取规则提供者信息
-        config_provider_info = {}
-        if self.mihomo_config_parser and self.mihomo_config_path and os.path.exists(self.mihomo_config_path):
-            try:
-                config_data = self.mihomo_config_parser.parse_config_file(self.mihomo_config_path)
-                if config_data:
-                    config_provider_info = self.mihomo_config_parser.extract_rule_providers(config_data)
-                    self.logger.debug(f"从配置文件加载了 {len(config_provider_info)} 个规则提供者")
-            except Exception as e:
-                self.logger.warning(f"从配置文件加载规则提供者失败: {e}")
-        
-        # 步骤4：合并API和配置提供者信息
-        # 配置文件信息优先于API信息
-        providers_info = rule_providers_data.get("providers", {})
-        providers_info.update(config_provider_info)
-        
-        # 步骤5：初始化内存聚合器
-        # 初始化固定策略的聚合器
-        aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
-        
-        # 步骤6：处理规则
-        await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules)
-        
-        # 步骤7：写入中间文件
-        self._write_intermediate_files(aggregated_rules)
-        
-        self.logger.info(f"中间文件成功生成于: {self.intermediate_dir}")
-        return self.intermediate_dir
+            # 步骤4：合并API和配置提供者信息
+            # 配置文件信息优先于API信息
+            providers_info = rule_providers_data.get("providers", {})
+            providers_info.update(config_provider_info)
+            self.logger.debug(
+                f"合并后共有 {len(providers_info)} 个规则提供者",
+                extra={
+                    "api_providers": len(rule_providers_data.get("providers", {})),
+                    "config_providers": len(config_provider_info)
+                }
+            )
+            
+            # 步骤5：初始化内存聚合器
+            # 初始化固定策略的聚合器
+            aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
+            
+            # 步骤6：处理规则
+            self.logger.debug("正在处理规则...")
+            process_start_time = time.time()
+            await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules)
+            process_duration = time.time() - process_start_time
+            
+            self.logger.debug(
+                "规则处理完成",
+                extra={
+                    "处理耗时_秒": round(process_duration, 3)
+                }
+            )
+            
+            # 步骤7：写入中间文件
+            self.logger.debug("正在写入中间文件...")
+            write_start_time = time.time()
+            self._write_intermediate_files(aggregated_rules)
+            write_duration = time.time() - write_start_time
+            
+            total_duration = time.time() - start_time
+            self.logger.info(
+                f"中间文件成功生成于: {self.intermediate_dir}",
+                extra={
+                    "总耗时_秒": round(total_duration, 3),
+                    "API获取耗时_秒": round(api_duration, 3),
+                    "配置解析耗时_秒": round(config_duration, 3),
+                    "规则处理耗时_秒": round(process_duration, 3),
+                    "文件写入耗时_秒": round(write_duration, 3)
+                }
+            )
+            
+            return self.intermediate_dir
+            
+        except Exception as e:
+            total_duration = time.time() - start_time
+            self.logger.error(
+                "规则生成协调过程中发生错误",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "总耗时_秒": round(total_duration, 3)
+                }
+            )
+            raise
     
     def _prepare_workspace(self) -> None:
         """通过清理和创建中间目录来准备工作空间。"""
+        start_time = time.time()
         if os.path.exists(self.intermediate_dir):
             shutil.rmtree(self.intermediate_dir)
+            self.logger.debug(f"已清理中间目录: {self.intermediate_dir}")
+        
         os.makedirs(self.intermediate_dir)
-        self.logger.debug(f"已清理并创建中间目录: {self.intermediate_dir}")
+        duration = time.time() - start_time
+        self.logger.debug(
+            f"已创建中间目录: {self.intermediate_dir}",
+            extra={
+                "准备耗时_秒": round(duration, 3)
+            }
+        )
+    
+    def _write_intermediate_files(self, aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
+        """
+        将聚合的规则写入中间文件。
+        
+        Args:
+            aggregated_rules: 聚合的规则数据
+        """
+        self.logger.debug("开始写入中间文件...")
+        start_time = time.time()
+        
+        # 为每个策略创建文件
+        for policy, rule_types in aggregated_rules.items():
+            policy_dir = os.path.join(self.intermediate_dir, policy.lower())
+            os.makedirs(policy_dir, exist_ok=True)
+            
+            # 写入域名规则
+            if "domain" in rule_types:
+                domain_file_path = os.path.join(policy_dir, "domain.txt")
+                with open(domain_file_path, "w", encoding="utf-8") as f:
+                    # 收集所有域名规则
+                    all_domain_rules = set()
+                    for provider_rules in rule_types["domain"].values():
+                        all_domain_rules.update(provider_rules)
+                    
+                    # 写入规则，每行一个
+                    for rule in sorted(all_domain_rules):
+                        f.write(rule + "\n")
+                
+                self.logger.debug(
+                    f"已写入域名规则文件: {domain_file_path}",
+                    extra={
+                        "策略": policy,
+                        "规则数量": len(all_domain_rules)
+                    }
+                )
+            
+            # 写入IP CIDR规则
+            if "ipcidr" in rule_types:
+                ipcidr_file_path = os.path.join(policy_dir, "ipcidr.txt")
+                with open(ipcidr_file_path, "w", encoding="utf-8") as f:
+                    # 收集所有IP CIDR规则
+                    all_ipcidr_rules = set()
+                    for provider_rules in rule_types["ipcidr"].values():
+                        all_ipcidr_rules.update(provider_rules)
+                    
+                    # 写入规则，每行一个
+                    for rule in sorted(all_ipcidr_rules):
+                        f.write(rule + "\n")
+                
+                self.logger.debug(
+                    f"已写入IP CIDR规则文件: {ipcidr_file_path}",
+                    extra={
+                        "策略": policy,
+                        "规则数量": len(all_ipcidr_rules)
+                    }
+                )
+        
+        duration = time.time() - start_time
+        self.logger.debug(
+            "中间文件写入完成",
+            extra={
+                "写入耗时_秒": round(duration, 3)
+            }
+        )
     
     async def _process_rules(self, rules_data: Dict[str, Any], providers_info: Dict[str, Any], 
                              proxies_data: Dict[str, Any],
@@ -96,16 +254,52 @@ class RuleGenerationOrchestrator:
             proxies_data: 来自Mihomo API的代理数据
             aggregated_rules: 用于固定策略的规则内存聚合器
         """
+        self.logger.debug("开始处理规则...")
+        start_time = time.time()
+        
+        rules = rules_data.get("rules", [])
+        self.logger.debug(f"共有 {len(rules)} 条规则需要处理")
+        
+        processed_count = 0
+        rule_set_count = 0
+        single_rule_count = 0
+        
         # 处理每个规则
-        for rule in rules_data.get("rules", []):
+        for i, rule in enumerate(rules):
             rule_type = rule.get("type", "")
             
             if rule_type.lower() == "ruleset":
                 # 处理RULE-SET类型规则
                 await self._process_rule_set_rule(rule, providers_info, proxies_data, aggregated_rules)
+                rule_set_count += 1
             else:
                 # 处理单个规则
                 self._process_single_rule(rule, proxies_data, aggregated_rules)
+                single_rule_count += 1
+            
+            processed_count += 1
+            
+            # 每处理100条规则记录一次进度
+            if processed_count % 100 == 0:
+                self.logger.debug(
+                    f"已处理 {processed_count}/{len(rules)} 条规则",
+                    extra={
+                        "rule_set_count": rule_set_count,
+                        "single_rule_count": single_rule_count
+                    }
+                )
+        
+        duration = time.time() - start_time
+        self.logger.debug(
+            "规则处理完成",
+            extra={
+                "总规则数": len(rules),
+                "已处理规则数": processed_count,
+                "RULE_SET规则数": rule_set_count,
+                "单个规则数": single_rule_count,
+                "处理耗时_秒": round(duration, 3)
+            }
+        )
     
     async def _process_rule_set_rule(self, rule: Dict[str, Any], providers_info: Dict[str, Any],
                                      proxies_data: Dict[str, Any],
@@ -125,7 +319,13 @@ class RuleGenerationOrchestrator:
             
             # 如果没有策略或提供者名称则跳过
             if not policy or not provider_name:
-                self.logger.warning(f"跳过缺少策略或提供者的RULE-SET规则: {rule}")
+                self.logger.warning(
+                    f"跳过缺少策略或提供者的RULE-SET规则: {rule}",
+                    extra={
+                        "policy": policy,
+                        "provider_name": provider_name
+                    }
+                )
                 return
             
             # 使用PolicyResolver解析最终策略
@@ -133,18 +333,40 @@ class RuleGenerationOrchestrator:
             
             # 仅处理具有固定策略的规则
             if resolved_policy not in self.FIXED_POLICIES:
-                self.logger.debug(f"跳过具有非固定策略的RULE-SET规则: {resolved_policy}")
+                self.logger.debug(
+                    f"跳过具有非固定策略的RULE-SET规则: {resolved_policy}",
+                    extra={
+                        "original_policy": policy,
+                        "resolved_policy": resolved_policy
+                    }
+                )
                 return
             
             # 查找提供者信息
             if provider_name not in providers_info:
-                self.logger.warning(f"在提供者信息中未找到提供者 '{provider_name}'")
+                self.logger.warning(
+                    f"在提供者信息中未找到提供者 '{provider_name}'",
+                    extra={
+                        "provider_name": provider_name,
+                        "available_providers": list(providers_info.keys())[:10]  # 只显示前10个
+                    }
+                )
                 return
                 
             provider_info = providers_info[provider_name]
             
             # 获取和解析规则集内容
+            self.logger.debug(
+                f"正在获取规则集内容: {provider_name}",
+                extra={
+                    "provider_name": provider_name
+                }
+            )
+            
             content_list = RuleConverter.fetch_and_parse_ruleset(provider_info)
+            self.logger.debug(
+                f"规则集 {provider_name} 包含 {len(content_list)} 条规则"
+            )
             
             # 分离域名和ipcidr规则
             domain_rules = set()
@@ -168,9 +390,25 @@ class RuleGenerationOrchestrator:
             if ipcidr_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault(provider_name, set()).update(ipcidr_rules)
             
-            self.logger.debug(f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipcidr_rules)} 个ipcidr规则，策略为 {resolved_policy}")
+            self.logger.debug(
+                f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipcidr_rules)} 个ipcidr规则，策略为 {resolved_policy}",
+                extra={
+                    "provider_name": provider_name,
+                    "domain_rules_count": len(domain_rules),
+                    "ipcidr_rules_count": len(ipcidr_rules),
+                    "resolved_policy": resolved_policy
+                }
+            )
         except Exception as e:
-            self.logger.error(f"处理RULE-SET规则时出错: {e}", exc_info=True)
+            self.logger.error(
+                f"处理RULE-SET规则时出错: {e}",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "rule": rule
+                },
+                exc_info=True
+            )
     
     def _process_single_rule(self, rule: Dict[str, Any], proxies_data: Dict[str, Any],
                              aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
@@ -187,7 +425,12 @@ class RuleGenerationOrchestrator:
             
             # 如果没有策略则跳过
             if not policy:
-                self.logger.warning(f"跳过缺少策略的单个规则: {rule}")
+                self.logger.warning(
+                    f"跳过缺少策略的单个规则: {rule}",
+                    extra={
+                        "rule": rule
+                    }
+                )
                 return
             
             # 使用PolicyResolver解析最终策略
@@ -195,59 +438,43 @@ class RuleGenerationOrchestrator:
             
             # 仅处理具有固定策略的规则
             if resolved_policy not in self.FIXED_POLICIES:
-                self.logger.debug(f"跳过具有非固定策略的单个规则: {resolved_policy}")
+                self.logger.debug(
+                    f"跳过具有非固定策略的单个规则: {resolved_policy}",
+                    extra={
+                        "original_policy": policy,
+                        "resolved_policy": resolved_policy
+                    }
+                )
                 return
             
-            # 转换单个规则
-            mosdns_rule, content_type = RuleConverter.convert_single_rule(rule)
+            # 根据规则类型进行处理
+            rule_type = rule.get("type", "").lower()
+            rule_payload = rule.get("payload", "")
             
-            # 如果转换失败则跳过
-            if mosdns_rule is None or content_type is None:
-                self.logger.debug(f"跳过不支持的规则: {rule}")
-                return
+            if rule_type in ["domain", "full", "keyword", "regexp"]:
+                # 域名规则
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
+            elif rule_type in ["ip-cidr", "ip-cidr6"]:
+                # IP CIDR规则
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
+            else:
+                # 其他类型的规则默认处理为域名规则
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
             
-            # 使用特殊 _inline 提供者名称添加到聚合器
-            aggregated_rules.setdefault(resolved_policy, {}).setdefault(content_type, {}).setdefault("_inline", set()).add(mosdns_rule)
-            
-            self.logger.debug(f"已处理单个规则: {rule} -> {mosdns_rule}，策略为 {resolved_policy}")
+            self.logger.debug(
+                f"已处理单个规则: 类型={rule_type}, 策略={resolved_policy}",
+                extra={
+                    "rule_type": rule_type,
+                    "payload": rule_payload,
+                    "resolved_policy": resolved_policy
+                }
+            )
         except Exception as e:
-            self.logger.error(f"处理单个规则时出错: {e}", exc_info=True)
-    
-    def _write_intermediate_files(self, aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
-        """
-        将聚合的规则写入中间文件。
-        
-        Args:
-            aggregated_rules: 包含所有规则的内存聚合器
-        """
-        # 确保固定策略文件夹都存在，即使没有规则
-        for policy in self.FIXED_POLICIES:
-            if policy not in aggregated_rules:
-                aggregated_rules[policy] = {}
-        
-        for policy, types in aggregated_rules.items():
-            # 只处理固定策略
-            if policy not in self.FIXED_POLICIES:
-                continue
-                
-            for content_type, providers in types.items():
-                for provider_name, rule_set in providers.items():
-                    # 跳过空规则集
-                    if not rule_set:
-                        continue
-                    
-                    # 创建目标目录
-                    target_dir = os.path.join(self.intermediate_dir, policy, content_type)
-                    os.makedirs(target_dir, exist_ok=True)
-                    
-                    # 确定文件名
-                    filename = f"provider_{provider_name}.list" if provider_name != "_inline" else "_inline_rules.list"
-                    filepath = os.path.join(target_dir, filename)
-                    
-                    # 将规则写入文件
-                    try:
-                        with open(filepath, 'w', encoding='utf-8') as f:
-                            f.write('\n'.join(sorted(list(rule_set))))
-                        self.logger.debug(f"已将 {len(rule_set)} 条规则写入 {filepath}")
-                    except Exception as e:
-                        self.logger.error(f"写入中间文件 {filepath} 失败: {e}")
+            self.logger.error(
+                f"处理单个规则时出错: {e}",
+                extra={
+                    "error": str(e),
+                    "error_type": type(e).__name__,
+                    "rule": rule
+                }
+            )

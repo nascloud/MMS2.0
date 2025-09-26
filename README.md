@@ -27,6 +27,31 @@
 5. **原子写入**: 原子化写入配置文件确保完整性
 6. **服务重载**: 安全地重载 Mosdns 服务应用新规则
 
+## 日志系统优化
+
+v2.0版本对日志系统进行了全面优化，提供更详细的运行信息：
+
+### 增强的日志格式
+- 添加了毫秒级时间戳，便于精确追踪事件时间
+- 包含进程ID、文件名和行号，便于定位问题
+- 支持中文日志级别显示，提高可读性
+- 添加了服务版本信息
+
+### 详细的性能监控
+- 记录各阶段执行耗时（API请求、规则处理、文件写入等）
+- 监控重试次数和延迟时间
+- 统计规则数量和处理进度
+
+### 丰富的上下文信息
+- 记录API调用详情（URL、状态码、响应内容）
+- 跟踪规则处理过程（规则集名称、规则数量等）
+- 记录配置变更和状态变化
+
+### 改进的错误处理
+- 提供详细的错误类型和错误信息
+- 记录异常堆栈跟踪，便于调试
+- 区分不同级别的错误（警告、错误、严重）
+
 ## 快速开始
 
 ### 配置
@@ -154,13 +179,15 @@ docker logs mihomo-mosdns-sync | jq 'select(.module == "MosdnsRuleGenerator")'
 典型的日志格式：
 ```json
 {
-  "timestamp": "2023-10-27T10:05:00.500Z",
-  "level": "INFO",
-  "logger": "mihomo_sync.modules.mosdns_controller",
-  "message": "Rules generated and written to file successfully",
-  "service_name": "mihomo-mosdns-sync",
-  "config_path": "/etc/mosdns/rules/mihomo_generated.list",
-  "rules_count": 152
+  "时间": "2023-10-27T10:05:00.500Z",
+  "级别": "信息",
+  "模块": "mihomo_sync.modules.mosdns_controller",
+  "消息": "Rules generated and written to file successfully",
+  "服务名称": "mihomo-mosdns-sync",
+  "版本": "2.0",
+  "配置路径": "/etc/mosdns/rules/mihomo_generated.list",
+  "规则数量": 152,
+  "执行耗时_秒": 0.234
 }
 ```
 
