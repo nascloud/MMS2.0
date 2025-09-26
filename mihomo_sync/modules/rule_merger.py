@@ -121,14 +121,15 @@ class RuleMerger:
                 if content_type == "domain":
                     output_filename = f"{policy_lower}_domain.txt"
                 elif content_type == "ipcidr":
-                    # Check if we have IPv6 rules (ip-cidr6:) in the set
-                    has_ipv6 = any(rule.startswith("ip-cidr6:") for rule in final_rules)
-                    has_ipv4 = any(rule.startswith("ip-cidr:") for rule in final_rules)
+                    # Check if we have IPv6 rules in the set by checking for ":"
+                    # IPv6 addresses contain ":" while IPv4 addresses don't
+                    has_ipv6 = any(":" in rule and "." not in rule for rule in final_rules)
+                    has_ipv4 = any("." in rule for rule in final_rules)
                     
                     # If we have both IPv4 and IPv6 rules, create separate files
                     if has_ipv6 and has_ipv4:
                         # Create IPv4 file
-                        ipv4_rules = {rule for rule in final_rules if rule.startswith("ip-cidr:")}
+                        ipv4_rules = {rule for rule in final_rules if "." in rule}
                         if ipv4_rules:
                             output_filename = f"{policy_lower}_ipv4.txt"
                             output_filepath = os.path.join(final_output_path, output_filename)
@@ -155,7 +156,7 @@ class RuleMerger:
                                 raise
                         
                         # Create IPv6 file
-                        ipv6_rules = {rule for rule in final_rules if rule.startswith("ip-cidr6:")}
+                        ipv6_rules = {rule for rule in final_rules if ":" in rule and "." not in rule}
                         if ipv6_rules:
                             output_filename = f"{policy_lower}_ipv6.txt"
                             output_filepath = os.path.join(final_output_path, output_filename)
@@ -185,6 +186,31 @@ class RuleMerger:
                     elif has_ipv6:
                         # Only IPv6 rules
                         output_filename = f"{policy_lower}_ipv6.txt"
+                        ipv6_rules = {rule for rule in final_rules if ":" in rule and "." not in rule}
+                        if ipv6_rules:
+                            output_filepath = os.path.join(final_output_path, output_filename)
+                            try:
+                                with open(output_filepath, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(sorted(list(ipv6_rules))))
+                                self.logger.debug(
+                                    "Merged directory rules (IPv6 only)",
+                                    extra={
+                                        "policy": policy,
+                                        "content_type": content_type,
+                                        "rules_count": len(ipv6_rules),
+                                        "output_file": output_filepath
+                                    }
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    "Failed to write final rule file (IPv6 only)",
+                                    extra={
+                                        "output_file": output_filepath,
+                                        "error": str(e)
+                                    }
+                                )
+                                raise
+                            return
                     else:
                         # Only IPv4 rules (or mixed but we'll treat as IPv4 for backward compatibility)
                         output_filename = f"{policy_lower}_ipv4.txt"

@@ -159,9 +159,9 @@ class RuleConverter:
         elif rule_type == "DOMAIN-REGEX":
             return f"regexp:{content}"
         elif rule_type == "IP-CIDR" or rule_type == "IPCIDR":
-            return f"ip-cidr:{content}"
+            return content  # 直接返回CIDR内容，不带前缀
         elif rule_type == "IP-CIDR6":
-            return f"ip-cidr6:{content}"
+            return content  # 直接返回CIDR内容，不带前缀
         else:
             # For unsupported types, return empty string
             logging.getLogger(__name__).warning(
@@ -288,11 +288,8 @@ class RuleConverter:
                         for line in f:
                             line = line.strip()
                             if line and not line.startswith('#'):
-                                # Determine if it's IPv6 or IPv4
-                                if ':' in line and '.' not in line:
-                                    rules.append(f"ip-cidr6:{line}")
-                                else:
-                                    rules.append(f"ip-cidr:{line}")
+                                # Just add the line directly without prefix
+                                rules.append(line)
                     return rules
             
             # If URL is provided, download and parse
@@ -305,11 +302,8 @@ class RuleConverter:
                     for line in response.text.splitlines():
                         line = line.strip()
                         if line and not line.startswith('#'):
-                            # Determine if it's IPv6 or IPv4
-                            if ':' in line and '.' not in line:
-                                rules.append(f"ip-cidr6:{line}")
-                            else:
-                                rules.append(f"ip-cidr:{line}")
+                            # Just add the line directly without prefix
+                            rules.append(line)
                     return rules
                 except Exception as e:
                     logging.getLogger(__name__).error(
@@ -369,10 +363,12 @@ class RuleConverter:
                                     rules.append(f"regexp:{regex}")
                                 elif line.startswith("IP-CIDR,"):
                                     cidr = line.split(",", 1)[1]
-                                    rules.append(f"ip-cidr:{cidr}")
+                                    # Add CIDR directly without prefix
+                                    rules.append(cidr)
                                 elif line.startswith("IP-CIDR6,"):
                                     cidr6 = line.split(",", 1)[1]
-                                    rules.append(f"ip-cidr6:{cidr6}")
+                                    # Add CIDR directly without prefix
+                                    rules.append(cidr6)
                     return rules
             
             # If URL is provided, download and parse
@@ -400,10 +396,12 @@ class RuleConverter:
                                 rules.append(f"regexp:{regex}")
                             elif line.startswith("IP-CIDR,"):
                                 cidr = line.split(",", 1)[1]
-                                rules.append(f"ip-cidr:{cidr}")
+                                # Add CIDR directly without prefix
+                                rules.append(cidr)
                             elif line.startswith("IP-CIDR6,"):
                                 cidr6 = line.split(",", 1)[1]
-                                rules.append(f"ip-cidr6:{cidr6}")
+                                # Add CIDR directly without prefix
+                                rules.append(cidr6)
                     return rules
                 except Exception as e:
                     logging.getLogger(__name__).error(

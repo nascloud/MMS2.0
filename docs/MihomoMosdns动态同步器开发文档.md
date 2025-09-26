@@ -203,7 +203,8 @@ graph TD
 | `DOMAIN`          | `full:payload`   | 精确匹配域名 |
 | `DOMAIN-KEYWORD`  | `keyword:payload`| 包含关键字的域名 |
 | `DOMAIN-REGEX`    | `regexp:payload` | Golang 正则匹配 |
-| `IP-CIDR`         | `ip-cidr:payload`| IP CIDR 匹配 |
+| `IP-CIDR`         | `payload`        | IP CIDR 匹配，不带前缀 |
+| `IP-CIDR6`        | `payload`        | IPv6 CIDR 匹配，不带前缀 |
 
 **注意事项**:
 1. **优先级**：MosDNS 中 `full` > `domain` > `regexp` > `keyword`，转换时需保持此优先级关系。
@@ -212,7 +213,7 @@ graph TD
    - `keyword`/`regexp` 类型具有 O(n) 复杂度，正则表达式较消耗资源
 3. **RuleSet 处理**：
    - 对于 `domain` 行为的 RuleSet，每条规则将转换为对应的 MosDNS 格式（domain:、full:、keyword:、regexp:）
-   - 对于 `ipcidr` 行为的 RuleSet，每条规则将转换为 ip-cidr: 格式
+   - 对于 `ipcidr` 行为的 RuleSet，每条规则将直接输出 CIDR 格式，不带前缀
    - 对于 `classical` 行为的 RuleSet，需要解析每行规则的类型并分别转换
 
 **特殊处理**:
