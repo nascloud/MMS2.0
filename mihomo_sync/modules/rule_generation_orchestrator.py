@@ -146,14 +146,29 @@ class RuleGenerationOrchestrator:
             # Fetch and parse ruleset content
             content_list = RuleConverter.fetch_and_parse_ruleset(provider_info)
             
-            # Determine content type based on provider behavior
-            behavior = provider_info.get("behavior", "domain")
-            content_type = "domain" if behavior.lower() == "domain" else "ipcidr" if behavior.lower() == "ipcidr" else "domain"
+            # Separate domain and ipcidr rules
+            domain_rules = set()
+            ipcidr_rules = set()
             
-            # Add to aggregator
-            aggregated_rules.setdefault(resolved_policy, {}).setdefault(content_type, {}).setdefault(provider_name, set()).update(content_list)
+            for rule_item in content_list:
+                if rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
+                    domain_rules.add(rule_item)
+                elif rule_item.startswith(("ip-cidr:", "ip-cidr6:")) or any(c in rule_item for c in [".", ":"]) and "/" in rule_item:
+                    # IP-CIDR rules typically contain "." or ":" and "/"
+                    ipcidr_rules.add(rule_item)
+                else:
+                    # Default to domain rules for unknown types
+                    domain_rules.add(rule_item)
             
-            self.logger.debug(f"Processed RULE-SET rule: {provider_name} -> {len(content_list)} rules for policy {resolved_policy}")
+            # Add domain rules to aggregator if any
+            if domain_rules:
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault(provider_name, set()).update(domain_rules)
+            
+            # Add ipcidr rules to aggregator if any
+            if ipcidr_rules:
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault(provider_name, set()).update(ipcidr_rules)
+            
+            self.logger.debug(f"Processed RULE-SET rule: {provider_name} -> {len(domain_rules)} domain rules, {len(ipcidr_rules)} ipcidr rules for policy {resolved_policy}")
         except Exception as e:
             self.logger.error(f"Error processing RULE-SET rule: {e}", exc_info=True)
     
