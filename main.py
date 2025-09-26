@@ -46,7 +46,8 @@ class MihomoMosdnsSyncService:
             self.config_manager = ConfigManager(config_path)
             
             # 使用配置的级别设置记录器
-            setup_logger(self.config_manager.get_log_level())
+            log_file_path = self.config_manager.get_log_file_path()
+            setup_logger(self.config_manager.get_log_level(), log_file_path if log_file_path else None)
             
             # 在setup_logger调用后重新初始化记录器
             self.logger = logging.getLogger(__name__)

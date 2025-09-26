@@ -44,12 +44,13 @@ class ChineseJsonFormatter(JsonFormatter):
         return json.dumps(log_record, ensure_ascii=False, separators=(',', ':'))
 
 
-def setup_logger(log_level='INFO'):
+def setup_logger(log_level='INFO', log_file_path=None):
     """
     设置具有指定日志级别的全局JSON记录器。
     
     Args:
         log_level (str): 日志级别 (例如: 'DEBUG', 'INFO', 'WARN', 'ERROR', 'CRITICAL')
+        log_file_path (str): 日志文件路径（可选）
     """
     # 获取根记录器
     root_logger = logging.getLogger()
@@ -84,3 +85,25 @@ def setup_logger(log_level='INFO'):
     
     # 将处理器添加到根记录器
     root_logger.addHandler(stream_handler)
+    
+    # 如果指定了日志文件路径，则添加文件处理器
+    if log_file_path:
+        # 确保日志目录存在
+        log_dir = os.path.dirname(log_file_path)
+        if log_dir and not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+        
+        # 创建文件处理器
+        file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
+        file_handler.setFormatter(json_formatter)
+        root_logger.addHandler(file_handler)
+        
+        # 记录日志配置信息
+        root_logger.info(
+            "日志系统初始化完成",
+            extra={
+                "日志级别": log_level,
+                "控制台输出": True,
+                "文件输出": log_file_path
+            }
+        )

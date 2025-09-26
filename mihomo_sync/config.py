@@ -94,3 +94,7 @@ class ConfigManager:
     def get_log_level(self):
         """Get the logging level."""
         return self._config.get('log_level')
+        
+    def get_log_file_path(self):
+        """Get the log file path."""
+        return self._config.get('log_file_path', '')
