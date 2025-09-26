@@ -26,6 +26,17 @@ class RuleMerger:
             # 步骤2：处理中间目录
             self._process_intermediate_directory(intermediate_path, final_output_path)
             
+            # 添加文件更新验证
+            if os.path.exists(final_output_path):
+                file_count = len([f for f in os.listdir(final_output_path) if os.path.isfile(os.path.join(final_output_path, f))])
+                self.logger.info(
+                    "文件更新验证完成",
+                    extra={
+                        "output_directory": final_output_path,
+                        "文件数量": file_count
+                    }
+                )
+
             self.logger.info(
                 "所有规则合并成功",
                 extra={

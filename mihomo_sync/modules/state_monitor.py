@@ -316,12 +316,13 @@ class StateMonitor:
                 elif self._last_state_hash is None:
                     self.logger.debug("首次状态检查完成，未检测到变化")
                 else:
+                    # 将无变化的日志等级调至debug，避免过多的日志输出
                     self.logger.debug("状态检查完成，未检测到变化")
                 
                 # 更新最后状态哈希
                 self._last_state_hash = current_state_hash
                 
-                # 记录周期信息
+                # 记录周期信息（将无变化情况下的周期信息调整为debug级别）
                 cycle_duration = time.time() - cycle_start_time
                 self.logger.debug(
                     "监控周期完成",
@@ -427,6 +428,16 @@ class StateMonitor:
             
             total_duration = time.time() - generation_start_time
             
+            # 添加文件更新确认日志
+            self.logger.info(
+                "规则文件更新完成",
+                extra={
+                    "output_directory": final_path,
+                    "更新时间": time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "总耗时_秒": round(total_duration, 3)
+                }
+            )
+
             if reload_success:
                 self.logger.info(
                     "规则生成与重载流程全部成功完成！",

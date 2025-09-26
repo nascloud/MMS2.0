@@ -93,7 +93,7 @@ def setup_logger(log_level='INFO', log_file_path=None):
         if log_dir and not os.path.exists(log_dir):
             os.makedirs(log_dir)
         
-        # 创建文件处理器
+        # 创建文件处理器，确保使用UTF-8编码
         file_handler = logging.FileHandler(log_file_path, encoding='utf-8')
         file_handler.setFormatter(json_formatter)
         root_logger.addHandler(file_handler)
