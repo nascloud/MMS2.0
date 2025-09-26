@@ -1,7 +1,7 @@
 import logging
 import os
 import shutil
-from typing import List
+from typing import Set
 
 
 class RuleMerger:
@@ -11,133 +11,147 @@ class RuleMerger:
         """Initialize the RuleMerger."""
         self.logger = logging.getLogger(__name__)
     
-    def merge_all_rules(self, temp_dir: str, output_dir: str) -> None:
+    def merge_from_intermediate(self, intermediate_path: str, final_output_path: str) -> None:
         """
-        Merge all intermediate files into final Mosdns rule files.
+        Merge rules from intermediate files into final Mosdns rule files.
         
         Args:
-            temp_dir (str): Directory containing intermediate files.
-            output_dir (str): Directory to save final rule files.
+            intermediate_path (str): Path to the intermediate files directory
+            final_output_path (str): Path to the final output directory
         """
         try:
-            # Clean output directory first
-            if os.path.exists(output_dir):
-                shutil.rmtree(output_dir)
+            # Step 1: Prepare workspace
+            self._prepare_workspace(final_output_path)
             
-            # Create output directory
-            os.makedirs(output_dir, exist_ok=True)
-            
-            # Process all policy directories in temp_dir
-            if os.path.exists(temp_dir):
-                for policy_dir in os.listdir(temp_dir):
-                    policy_temp_dir = os.path.join(temp_dir, policy_dir)
-                    if os.path.isdir(policy_temp_dir):
-                        # Convert policy name to uppercase for consistency
-                        policy = policy_dir.upper()
-                        self._merge_policy_rules(policy_temp_dir, policy, output_dir)
+            # Step 2: Process intermediate directory
+            self._process_intermediate_directory(intermediate_path, final_output_path)
             
             self.logger.info(
                 "Successfully merged all rules",
                 extra={
-                    "temp_dir": temp_dir,
-                    "output_dir": output_dir
+                    "intermediate_path": intermediate_path,
+                    "final_output_path": final_output_path
                 }
             )
         except Exception as e:
             self.logger.error(
                 "Failed to merge rules",
                 extra={
-                    "temp_dir": temp_dir,
-                    "output_dir": output_dir,
+                    "intermediate_path": intermediate_path,
+                    "final_output_path": final_output_path,
                     "error": str(e)
                 }
             )
             raise
     
-    def _merge_policy_rules(self, policy_temp_dir: str, policy: str, output_dir: str) -> None:
+    def _prepare_workspace(self, final_output_path: str) -> None:
         """
-        Merge rules for a specific policy.
+        Prepare the workspace by cleaning and creating the final output directory.
         
         Args:
-            policy_temp_dir (str): Temporary directory for the policy.
-            policy (str): Policy name.
-            output_dir (str): Directory to save final rule files.
+            final_output_path (str): Path to the final output directory
         """
-        # Define content types to process
-        content_types = ["domain", "ipv4", "ipv6"]
-        
-        # Process each content type
-        for content_type in content_types:
-            content_type_dir = os.path.join(policy_temp_dir, content_type)
-            if os.path.exists(content_type_dir):
-                self._merge_content_type_rules(content_type_dir, policy, content_type, output_dir)
+        if os.path.exists(final_output_path):
+            shutil.rmtree(final_output_path)
+        os.makedirs(final_output_path)
+        self.logger.debug(f"Cleaned and created final output directory: {final_output_path}")
     
-    def _merge_content_type_rules(self, content_type_dir: str, policy: str, content_type: str, output_dir: str) -> None:
+    def _process_intermediate_directory(self, intermediate_path: str, final_output_path: str) -> None:
         """
-        Merge rules for a specific content type.
+        Process the intermediate directory and merge rules.
         
         Args:
-            content_type_dir (str): Directory containing rules of a specific content type.
-            policy (str): Policy name.
-            content_type (str): Content type (domain, ipv4, ipv6).
-            output_dir (str): Directory to save final rule files.
+            intermediate_path (str): Path to the intermediate files directory
+            final_output_path (str): Path to the final output directory
+        """
+        # Walk through the intermediate directory structure
+        for root, dirs, files in os.walk(intermediate_path):
+            # Skip if no files in this directory
+            if not files:
+                continue
+            
+            # Determine policy and content type from directory structure
+            rel_path = os.path.relpath(root, intermediate_path)
+            path_parts = rel_path.split(os.sep)
+            
+            # We expect path structure like: policy/content_type
+            if len(path_parts) != 2:
+                continue
+                
+            policy, content_type = path_parts
+            
+            # Merge rules in this directory
+            self._merge_directory_rules(root, policy, content_type, final_output_path)
+    
+    def _merge_directory_rules(self, directory_path: str, policy: str, content_type: str, final_output_path: str) -> None:
+        """
+        Merge all rules in a specific directory.
+        
+        Args:
+            directory_path (str): Path to the directory containing rule files
+            policy (str): Policy name
+            content_type (str): Content type (domain, ipcidr, etc.)
+            final_output_path (str): Path to the final output directory
         """
         try:
-            # Collect all rule files
-            rule_files = []
-            for filename in os.listdir(content_type_dir):
-                if filename.endswith(".txt"):
-                    rule_files.append(os.path.join(content_type_dir, filename))
+            # Step 1: Collect all rules from .list files
+            final_rules: Set[str] = set()
             
-            # Sort files for consistent output
-            rule_files.sort()
-            
-            # Generate output filename
-            # Convert policy name to lowercase and content type to match expected format
-            policy_lower = policy.lower()
-            content_type_map = {
-                "domain": "domain",
-                "ipv4": "ipv4",
-                "ipv6": "ipv6"
-            }
-            content_type_suffix = content_type_map.get(content_type, content_type)
-            output_filename = f"{policy_lower}_{content_type_suffix}.txt"
-            output_filepath = os.path.join(output_dir, output_filename)
-            
-            # Merge all rules into the output file
-            with open(output_filepath, "w", encoding="utf-8") as output_file:
-                for rule_file in rule_files:
+            for filename in os.listdir(directory_path):
+                if filename.endswith(".list"):
+                    filepath = os.path.join(directory_path, filename)
                     try:
-                        with open(rule_file, "r", encoding="utf-8") as f:
-                            rule_content = f.read().strip()
-                            if rule_content:
-                                output_file.write(rule_content + "\n")
+                        with open(filepath, 'r', encoding='utf-8') as f:
+                            lines = [line.strip() for line in f.readlines() if line.strip()]
+                            final_rules.update(lines)
                     except Exception as e:
                         self.logger.warning(
                             "Failed to read rule file",
                             extra={
-                                "rule_file": rule_file,
+                                "rule_file": filepath,
                                 "error": str(e)
                             }
                         )
             
-            self.logger.debug(
-                "Merged content type rules",
-                extra={
-                    "policy": policy,
-                    "content_type": content_type,
-                    "rules_count": len(rule_files),
-                    "output_file": output_filename
-                }
-            )
+            # Step 2: Write final rules if not empty
+            if final_rules:
+                # Create output directory
+                output_dir = os.path.join(final_output_path, policy)
+                os.makedirs(output_dir, exist_ok=True)
+                
+                # Write final file
+                output_filename = f"{content_type}.list"
+                output_filepath = os.path.join(output_dir, output_filename)
+                
+                try:
+                    with open(output_filepath, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(sorted(list(final_rules))))
+                    self.logger.debug(
+                        "Merged directory rules",
+                        extra={
+                            "policy": policy,
+                            "content_type": content_type,
+                            "rules_count": len(final_rules),
+                            "output_file": output_filepath
+                        }
+                    )
+                except Exception as e:
+                    self.logger.error(
+                        "Failed to write final rule file",
+                        extra={
+                            "output_file": output_filepath,
+                            "error": str(e)
+                        }
+                    )
+                    raise
         except Exception as e:
             self.logger.error(
-                "Failed to merge content type rules",
+                "Failed to merge directory rules",
                 extra={
-                    "policy_temp_dir": content_type_dir,
+                    "directory_path": directory_path,
                     "policy": policy,
                     "content_type": content_type,
-                    "output_dir": output_dir,
+                    "final_output_path": final_output_path,
                     "error": str(e)
                 }
             )

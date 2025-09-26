@@ -14,6 +14,8 @@ from mihomo_sync.modules.api_client import MihomoApiClient
 from mihomo_sync.modules.mosdns_controller import MosdnsServiceController
 from mihomo_sync.modules.state_monitor import StateMonitor
 from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
+from mihomo_sync.modules.rule_generation_orchestrator import RuleGenerationOrchestrator
+from mihomo_sync.modules.rule_merger import RuleMerger
 
 
 class MihomoMosdnsSyncService:
@@ -27,6 +29,8 @@ class MihomoMosdnsSyncService:
         self.api_client: Optional[MihomoApiClient] = None
         self.mosdns_controller: Optional[MosdnsServiceController] = None
         self.state_monitor: Optional[StateMonitor] = None
+        self.rule_orchestrator: Optional[RuleGenerationOrchestrator] = None
+        self.rule_merger: Optional[RuleMerger] = None
         self.shutdown_event = asyncio.Event()
 
     async def initialize(self):
@@ -60,7 +64,14 @@ class MihomoMosdnsSyncService:
                 reload_command=self.config_manager.get_mosdns_reload_command()
             )
             
-            # Initialize state monitor
+            # Initialize new rule processing components
+            self.rule_merger = RuleMerger()
+            self.rule_orchestrator = RuleGenerationOrchestrator(
+                api_client=self.api_client,
+                config=self.config_manager
+            )
+            
+            # Initialize state monitor with new components
             self.state_monitor = StateMonitor(
                 api_client=self.api_client,
                 mosdns_controller=self.mosdns_controller,
@@ -68,7 +79,9 @@ class MihomoMosdnsSyncService:
                 polling_interval=self.config_manager.get_polling_interval(),
                 debounce_interval=self.config_manager.get_debounce_interval(),
                 mihomo_config_parser=self.mihomo_config_parser,
-                mihomo_config_path=self.config_manager.get_mihomo_config_path()
+                mihomo_config_path=self.config_manager.get_mihomo_config_path(),
+                orchestrator=self.rule_orchestrator,
+                merger=self.rule_merger
             )
             
             self.logger.info("Service initialization completed")

@@ -22,13 +22,14 @@
 1. **Mihomo**: 作为核心的代理引擎，是所有策略和状态的"唯一事实来源"。
 2. **Mihomo API 客户端**: 一个内置的、具有**指数退避重试与超时机制**的模块，负责与 `mihomo` RESTful API 的高容错通信。
 3. **Mihomo 配置文件解析器**: 负责解析 Mihomo 的本地配置文件，提取 rule-providers 的完整定义。
-4. **状态监视器 (State Monitor)**: 项目的核心驱动。以固定频率轮询 `mihomo` API，通过对关键状态数据进行**哈希摘要比对**来精确检测变更，并利用**防抖（Debounce）逻辑**来触发后续操作。
+4. **状态监视器 (State Monitor)**: 项目的核心驱动。以固定频率轮询 `mihomo` API，通过对关键状态数据进行**哈希摘要比对**来精确检测变更，并利用**防抖（Debounce）逻辑**来触发后续操作。已重构为两阶段生成架构的流程编排器。
 5. **规则解析器 (Rule Parser)**: 负责解析 `mihomo` API 响应数据，提取规则、代理和规则提供者信息。
 6. **策略追踪器 (Policy Tracer)**: 负责递归追踪 `mihomo` 中复杂的策略链，找出任意规则的最终出口节点，并内置**循环依赖检测**。
-7. **规则转换器 (Rule Converter)**: 负责将单条 mihomo 规则转换为 mosdns 格式，并生成中间文件。
-8. **规则合并器 (Rule Merger)**: 负责将临时目录中的所有中间文件合并成最终的 mosdns 规则文件。
-9. **Mosdns 服务控制器**: 负责执行系统命令安全地重载 `mosdns` 服务，并**捕获执行结果**。
-10. **日志记录器 (Logger)**: 贯穿所有模块的日志中心，负责以**结构化 (JSON格式)** 输出所有事件。
+7. **规则生成协调器 (Rule Generation Orchestrator)**: 两阶段生成架构的第一阶段。负责从 Mihomo API 获取所有数据，并将其高效地转换为结构化的、按规则来源分类的中间文件。
+8. **规则转换器 (Rule Converter)**: 已重构为无状态的纯工具类，只提供逻辑转换功能，不执行任何 I/O 或网络操作。
+9. **规则合并器 (Rule Merger)**: 两阶段生成架构的第二阶段。负责读取规则生成协调器生成的结构化中间文件，高效地将它们合并、去重，并生成 Mosdns 使用的最终规则文件。
+10. **Mosdns 服务控制器**: 负责执行系统命令安全地重载 `mosdns` 服务，并**捕获执行结果**。
+11. **日志记录器 (Logger)**: 贯穿所有模块的日志中心，负责以**结构化 (JSON格式)** 输出所有事件。
 
 ##### 2.2 数据与逻辑流程图
 
@@ -53,27 +54,26 @@ graph TD
         Compare -- 摘要相同 --> C;
         Debounce -- 计时结束 --> E[触发规则生成];
         E -- 获取最新状态 --> D;
-        D -- /rules, /proxies, /providers/rules, /configs --> F[规则解析器];
-        F -- 解析API响应 --> G[策略追踪器];
-        G -- 追踪策略链 --> H[规则转换器];
-        H -- 转换并保存中间文件 --> I[临时目录];
-        I -- 合并所有文件 --> J[规则合并器];
-        J -- 生成最终文件 --> K[mosdns规则目录];
-        K --> L[Mosdns 服务控制器];
-        L -- 执行 reload 命令 --> M(Mosdns 服务);
-        M -- 应用新规则 --> N[DNS 解析请求];
+        D -- /rules, /proxies, /providers/rules, /configs --> F[规则生成协调器];
+        F -- 生成中间文件 --> G[中间文件目录];
+        G -- 合并并去重 --> H[规则合并器];
+        H -- 生成最终文件 --> I[mosdns规则目录];
+        I --> J[Mosdns 服务控制器];
+        J -- 执行 reload 命令 --> K(Mosdns 服务);
+        K -- 应用新规则 --> L[DNS 解析请求];
     end
     
     subgraph "配置文件解析"
         ConfigParse[Mihomo配置文件解析器] -- 解析rule-providers --> RuleProviders[规则提供者信息];
-        RuleProviders --> H;
+        RuleProviders --> RuleConverter[规则转换器];
     end
     
     subgraph "日志记录 (贯穿所有阶段)"
         HC -- 记录检查结果 --> Logger[结构化日志系统];
         D -- 记录API请求/重试 --> Logger;
-        H -- 记录文件写入成功/失败 --> Logger;
-        L -- 记录命令执行结果 --> Logger;
+        F -- 记录中间文件生成 --> Logger;
+        H -- 记录文件合并结果 --> Logger;
+        J -- 记录命令执行结果 --> Logger;
     end
 
     Init --> A
@@ -134,10 +134,12 @@ graph TD
  * `resolve(policy_name, proxies_data)`: 输入策略组名称和所有代理的数据，返回其最终的出口节点名称。
 
 ##### 3.6 `RuleConverter` (规则转换器)
-* **职责**: 将单条 mihomo 规则转换为 mosdns 格式，并生成中间文件。
-* **暴露接口**: `convert_and_save(mihomo_rule, final_policy, temp_dir, provider_info)`
+* **职责**: 已重构为无状态的纯工具类，只提供逻辑转换功能，不执行任何 I/O 或网络操作。
+* **暴露接口**: 
+ * `convert_single_rule(rule)`: 转换单条 Mihomo 规则并返回 Mosdns 格式字符串和内容类型
+ * `fetch_and_parse_ruleset(provider_info)`: 获取并解析 RuleSet 提供者的内容
 * **内部逻辑**:
- 1. **确定内容类型**: 根据规则的 type (如 DOMAIN-SUFFIX, IP-CIDR) 或 payload (如果 type 是 RuleSet，例如 private_ip 被归为 IP 类型) 来判断内容是 domain, ipv4 还是 ipv6。
+ 1. **确定内容类型**: 根据规则的 type (如 DOMAIN-SUFFIX, IP-CIDR) 来判断内容是 domain, ipv4 还是 ipv6。
  2. **获取规则内容**: 
     * 对于普通规则，payload 就是内容。
     * 对于 RuleSet 类型，需要根据 provider_info 中的信息处理：
@@ -150,21 +152,31 @@ graph TD
      * DOMAIN-KEYWORD -> keyword:payload
      * DOMAIN-REGEX -> regexp:payload
      * IP-CIDR -> ip-cidr:payload
- 4. **保存中间文件**:
-     * 为每条规则内容（例如 domain:google.com）生成一个唯一的文件名（如使用 MD5 哈希）。
-     * 根据 final_policy 和内容类型，将其保存在对应的临时目录中，如 temp_rules/proxy/domain/md5_hash.txt。
 
-##### 3.7 `RuleMerger` (规则合并器)
-* **职责**: 将临时目录中的所有中间文件合并成最终的 mosdns 规则文件。
-* **暴露接口**: `merge_all_rules(temp_dir, output_dir)`
+##### 3.7 `RuleGenerationOrchestrator` (规则生成协调器)
+* **职责**: 两阶段生成架构的第一阶段。负责从 Mihomo API 获取所有数据，并将其高效地转换为结构化的、按规则来源分类的中间文件。
+* **暴露接口**: `run()`
 * **内部逻辑**:
- 1. **清空输出目录**: 在执行合并前，使用 `shutil.rmtree()` 清空 OUTPUT_DIR，然后重新创建空目录。
- 2. **遍历策略目录**: 遍历 TEMP_DIR 下的三个策略子目录 (direct, proxy, reject)。
- 3. **遍历内容类型目录**: 在每个策略子目录下，再遍历三个内容类型子目录 (domain, ipv4, ipv6)。
- 4. **合并规则文件**: 将每个最内层子目录中的所有 .txt 文件的内容读取出来，合并写入到 OUTPUT_DIR 下对应的最终文件中，如 direct_domain.txt, proxy_ipv4.txt 等。
+ 1. **准备工作**: 彻底清理或删除旧的中间目录，确保每次运行都是一个全新的开始。
+ 2. **一次性数据获取**: 调用 Mihomo API 获取所有规则列表和 RULE-SET 提供者的详细信息。
+ 3. **初始化内存聚合器**: 创建一个三层嵌套的字典，用于在内存中对规则进行分类和聚合。
+ 4. **遍历API规则列表**: 
+    * 对于 RULE-SET 类型的规则，调用 RuleConverter.fetch_and_parse_ruleset 获取解析后的内容列表
+    * 对于单条规则，调用 RuleConverter.convert_single_rule 转换为 Mosdns 格式
+    * 将所有规则按策略、内容类型和提供者进行分类聚合
+ 5. **写入中间文件**: 将聚合后的规则写入结构化的中间文件，路径结构为 {intermediate_dir}/{policy}/{content_type}/provider_{provider_name}.list
+
+##### 3.8 `RuleMerger` (规则合并器)
+* **职责**: 两阶段生成架构的第二阶段。负责读取规则生成协调器生成的结构化中间文件，高效地将它们合并、去重，并生成 Mosdns 使用的最终规则文件。
+* **暴露接口**: `merge_from_intermediate(intermediate_path, final_output_path)`
+* **内部逻辑**:
+ 1. **准备工作**: 彻底清理或删除旧的最终输出目录。
+ 2. **遍历中间目录**: 使用 os.walk 遍历中间目录下的所有策略和内容类型子目录。
+ 3. **合并与去重**: 对于每一个策略和内容类型的子目录，使用集合自动处理所有跨文件的重复规则。
+ 4. **写入最终文件**: 将去重后的规则排序后写入最终的文件中，如 domain.list, ipv4.list 等。
  5. **错误处理**: 对于无法读取的文件，记录警告日志并继续处理其他文件。
 
-##### 3.8 `MosdnsServiceController` (服务控制器)
+##### 3.9 `MosdnsServiceController` (服务控制器)
 * **职责**: 与操作系统交互，控制 `mosdns` 服务并处理执行结果。
 * **暴露接口**: `reload()`
  * 使用 `subprocess` 模块执行 `ConfigManager` 中定义的重载命令。

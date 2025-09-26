@@ -2,11 +2,11 @@
 
 ## 功能介绍
 
-StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动模块，负责深度监控 Mihomo 的状态变化并触发规则生成流程。该模块通过定期轮询 Mihomo API，使用哈希摘要比对精确检测状态变化，并通过防抖机制优化规则生成触发。
+StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动模块，负责深度监控 Mihomo 的状态变化并触发规则生成流程。该模块已重构为两阶段生成架构的流程编排器，通过定期轮询 Mihomo API，使用哈希摘要比对精确检测状态变化，并通过防抖机制优化规则生成触发。
 
 ## 工作流程
 
-1. **初始化**：接收所有依赖模块的实例（API 客户端、Mosdns 控制器等）和配置参数。
+1. **初始化**：接收所有依赖模块的实例（API 客户端、Mosdns 控制器、RuleGenerationOrchestrator、RuleMerger 等）和配置参数。
 
 2. **监控循环**：
    - 按配置的时间间隔轮询 Mihomo API
@@ -23,18 +23,13 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
    - 在防抖间隔内，连续的状态变化只会触发一次规则生成
    - 防抖间隔结束后，执行规则生成流程
 
-5. **规则生成流程**：
-   - 创建临时目录用于存储中间文件
-   - 从 Mihomo API 获取所有必要数据（规则、代理、规则提供者、配置）
-   - 解析 Mihomo 本地配置文件（如果配置了路径）
-   - 初始化所有处理模块（策略解析器、规则解析器、规则转换器、规则合并器）
-   - 解析 API 数据
-   - 处理每条规则：
-     - 提取规则目标
-     - 使用策略解析器确定最终出口策略
-     - 使用规则转换器转换并保存规则
-   - 使用规则合并器合并所有中间文件
-   - 重载 Mosdns 服务
+5. **规则生成流程**（重构后）：
+   - 阶段一：分发阶段
+     - 调用 RuleGenerationOrchestrator 生成中间文件
+   - 阶段二：合并阶段
+     - 调用 RuleMerger 生成最终文件
+   - 阶段三：重载阶段
+     - 通知 Mosdns 应用新规则
 
 ## 输入参数
 
@@ -49,6 +44,8 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 | debounce_interval | float | 是 | 防抖间隔（秒） |
 | mihomo_config_parser | MihomoConfigParser | 否 | Mihomo 配置解析器实例 |
 | mihomo_config_path | str | 否 | Mihomo 配置文件路径 |
+| orchestrator | RuleGenerationOrchestrator | 否 | 规则生成协调器实例 |
+| merger | RuleMerger | 否 | 规则合并器实例 |
 
 ### start 方法
 
@@ -78,6 +75,8 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 - debounce_interval: 防抖间隔
 - mihomo_config_parser: Mihomo 配置解析器实例
 - mihomo_config_path: Mihomo 配置文件路径
+- orchestrator: 规则生成协调器实例
+- merger: 规则合并器实例
 - logger: 日志记录器
 - _last_state_hash: 上次状态哈希
 - _debounce_task: 防抖任务
@@ -99,7 +98,7 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 ### _generate_rules 方法
 
 该方法没有返回值，但会产生以下副作用：
-- 生成中间文件
-- 生成最终规则文件
+- 调用 RuleGenerationOrchestrator 生成中间文件
+- 调用 RuleMerger 生成最终规则文件
 - 重载 Mosdns 服务
 - 记录执行日志

@@ -2,80 +2,97 @@
 
 ## 功能介绍
 
-RuleMerger（规则合并器）是 Mihomo-Mosdns 同步系统中的文件处理模块，负责将 RuleConverter 生成的中间文件合并成最终的 Mosdns 规则文件。该模块处理临时目录中的所有策略和内容类型文件，生成可以直接被 Mosdns 使用的规则文件。
+RuleMerger（规则合并器）是 Mihomo-Mosdns 同步系统中两阶段生成架构的第二阶段模块。它负责读取 RuleGenerationOrchestrator 生成的结构化中间文件，高效地将它们合并、去重，并生成 Mosdns 使用的最终规则文件。该模块实现了跨文件的规则去重，确保最终生成的规则文件中没有重复项。
 
 ## 工作流程
 
-1. **清理输出目录**：在开始合并之前，清空输出目录中的所有文件，确保生成的是最新规则。
+1. **准备工作**：
+   - 彻底清理或删除旧的最终输出目录
+   - 创建新的输出目录结构
 
-2. **遍历策略目录**：扫描临时目录中的所有策略子目录（如 direct、proxy、reject）。
+2. **遍历中间目录**：
+   - 使用 os.walk 遍历中间目录下的所有策略和内容类型子目录
+   - 识别目录结构中的策略和内容类型信息
 
-3. **处理每个策略**：对每个策略目录，处理其中的三种内容类型（domain、ipv4、ipv6）。
+3. **合并与去重**：
+   - 对于每一个策略和内容类型的子目录：
+     - 初始化一个空的规则集合（set）
+     - 遍历该目录下的所有 .list 文件
+     - 读取每个文件的所有行，并使用集合的 update 方法将它们全部添加到规则集合中
+     - 集合会自动处理所有跨文件的重复规则
 
-4. **合并内容类型规则**：
-   - 收集指定内容类型目录中的所有 .txt 文件
-   - 按文件名排序以确保输出一致性
-   - 将所有文件内容合并写入到输出目录的对应文件中
+4. **写入最终文件**：
+   - 当一个子目录下的所有文件都处理完毕后，如果规则集合不为空：
+     - 在最终输出目录下创建对应的策略目录
+     - 将规则集合的内容排序后，一次性写入到最终的文件中
+     - 文件命名格式：`{content_type}.list`
 
-5. **生成最终文件**：在输出目录中生成以下格式的文件：
-   - policy_contenttype.txt（如 direct_domain.txt、proxy_ipv4.txt、reject_ipv6.txt）
-
-6. **错误处理**：在读取单个文件失败时记录警告日志并继续处理其他文件。
+5. **错误处理**：
+   - 在读取单个文件失败时记录警告日志并继续处理其他文件
+   - 在写入文件失败时记录错误日志并抛出异常
 
 ## 输入参数
 
-### merge_all_rules 方法
+### merge_from_intermediate 方法
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
-| temp_dir | str | 是 | 包含中间文件的临时目录路径 |
-| output_dir | str | 是 | 生成最终规则文件的输出目录路径 |
+| intermediate_path | str | 是 | 包含中间文件的目录路径 |
+| final_output_path | str | 是 | 生成最终规则文件的输出目录路径 |
 
-### _merge_policy_rules 方法
-
-| 参数名 | 类型 | 必需 | 描述 |
-|--------|------|------|------|
-| policy_temp_dir | str | 是 | 特定策略的临时目录路径 |
-| policy | str | 是 | 策略名称（DIRECT、PROXY、REJECT） |
-| output_dir | str | 是 | 输出目录路径 |
-
-### _merge_content_type_rules 方法
+### _prepare_workspace 方法
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
-| content_type_dir | str | 是 | 特定内容类型的目录路径 |
-| policy | str | 是 | 策略名称 |
+| final_output_path | str | 是 | 最终输出目录路径 |
+
+### _process_intermediate_directory 方法
+
+| 参数名 | 类型 | 必需 | 描述 |
+|--------|------|------|------|
+| intermediate_path | str | 是 | 中间文件目录路径 |
+| final_output_path | str | 是 | 最终输出目录路径 |
+
+### _merge_directory_rules 方法
+
+| 参数名 | 类型 | 必需 | 描述 |
+|--------|------|------|------|
+| directory_path | str | 是 | 包含规则文件的目录路径 |
+| policy | str | 是 | 策略名称（PROXY、DIRECT、REJECT等） |
 | content_type | str | 是 | 内容类型（domain、ipv4、ipv6） |
-| output_dir | str | 是 | 输出目录路径 |
+| final_output_path | str | 是 | 最终输出目录路径 |
 
 ## 输出参数
 
-### merge_all_rules 方法
+### merge_from_intermediate 方法
 
 该方法没有返回值，但会产生以下副作用：
 
 1. **输出目录清理**：删除输出目录中的所有现有文件。
 
-2. **最终文件生成**：在输出目录中创建以下文件：
+2. **最终文件生成**：在输出目录中创建以下文件结构：
    ```
-   output_dir/
-   ├── direct_domain.txt
-   ├── direct_ipv4.txt
-   ├── direct_ipv6.txt
-   ├── proxy_domain.txt
-   ├── proxy_ipv4.txt
-   ├── proxy_ipv6.txt
-   ├── reject_domain.txt
-   ├── reject_ipv4.txt
-   └── reject_ipv6.txt
+   final_output_path/
+   ├── PROXY/
+   │   ├── domain.list
+   │   ├── ipv4.list
+   │   └── ipv6.list
+   ├── DIRECT/
+   │   ├── domain.list
+   │   ├── ipv4.list
+   │   └── ipv6.list
+   └── REJECT/
+       ├── domain.list
+       ├── ipv4.list
+       └── ipv6.list
    ```
 
 3. **日志记录**：记录规则合并过程中的关键信息和错误。
 
-### _merge_content_type_rules 方法
+### _merge_directory_rules 方法
 
 该方法没有返回值，但会产生以下副作用：
 
 1. **单个规则文件生成**：在输出目录中创建特定策略和内容类型的规则文件。
 
-2. **日志记录**：记录内容类型规则合并的详细信息。
+2. **日志记录**：记录目录规则合并的详细信息。
