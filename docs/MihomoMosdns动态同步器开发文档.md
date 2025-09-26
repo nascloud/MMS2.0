@@ -173,7 +173,17 @@ graph TD
  1. **准备工作**: 彻底清理或删除旧的最终输出目录。
  2. **遍历中间目录**: 使用 os.walk 遍历中间目录下的所有策略和内容类型子目录。
  3. **合并与去重**: 对于每一个策略和内容类型的子目录，使用集合自动处理所有跨文件的重复规则。
- 4. **写入最终文件**: 将去重后的规则排序后写入最终的文件中，如 domain.list, ipv4.list 等。
+ 4. **写入最终文件**: 将去重后的规则排序后写入最终的文件中，使用扁平化的命名方式，并区分IPv4和IPv6规则：
+    * DIRECT 策略的 domain 规则 → `direct_domain.txt`
+    * PROXY 策略的 domain 规则 → `proxy_domain.txt`
+    * REJECT 策略的 domain 规则 → `reject_domain.txt`
+    * DIRECT 策略的 IPv4 规则 → `direct_ipv4.txt`
+    * PROXY 策略的 IPv4 规则 → `proxy_ipv4.txt`
+    * REJECT 策略的 IPv4 规则 → `reject_ipv4.txt`
+    * DIRECT 策略的 IPv6 规则 → `direct_ipv6.txt`
+    * PROXY 策略的 IPv6 规则 → `proxy_ipv6.txt`
+    * REJECT 策略的 IPv6 规则 → `reject_ipv6.txt`
+    * 如果一个策略同时包含IPv4和IPv6规则，则会生成两个独立的文件
  5. **错误处理**: 对于无法读取的文件，记录警告日志并继续处理其他文件。
 
 ##### 3.9 `MosdnsServiceController` (服务控制器)
@@ -430,7 +440,7 @@ graph TD
 
 Mihomo 配置文件使用 YAML 格式，其中 `rule-providers` 部分定义了规则集的来源：
 
-```yaml
+```
 # Rule providers
 rule-providers:
   # Domain rule provider from URL

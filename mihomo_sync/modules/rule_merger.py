@@ -115,13 +115,84 @@ class RuleMerger:
             
             # Step 2: Write final rules if not empty
             if final_rules:
-                # Create output directory
-                output_dir = os.path.join(final_output_path, policy)
-                os.makedirs(output_dir, exist_ok=True)
+                # Create flat filename based on policy and content_type
+                # Convert to lowercase and replace content_type mapping
+                policy_lower = policy.lower()
+                if content_type == "domain":
+                    output_filename = f"{policy_lower}_domain.txt"
+                elif content_type == "ipcidr":
+                    # Check if we have IPv6 rules (ip-cidr6:) in the set
+                    has_ipv6 = any(rule.startswith("ip-cidr6:") for rule in final_rules)
+                    has_ipv4 = any(rule.startswith("ip-cidr:") for rule in final_rules)
+                    
+                    # If we have both IPv4 and IPv6 rules, create separate files
+                    if has_ipv6 and has_ipv4:
+                        # Create IPv4 file
+                        ipv4_rules = {rule for rule in final_rules if rule.startswith("ip-cidr:")}
+                        if ipv4_rules:
+                            output_filename = f"{policy_lower}_ipv4.txt"
+                            output_filepath = os.path.join(final_output_path, output_filename)
+                            try:
+                                with open(output_filepath, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(sorted(list(ipv4_rules))))
+                                self.logger.debug(
+                                    "Merged directory rules (IPv4)",
+                                    extra={
+                                        "policy": policy,
+                                        "content_type": content_type,
+                                        "rules_count": len(ipv4_rules),
+                                        "output_file": output_filepath
+                                    }
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    "Failed to write final rule file (IPv4)",
+                                    extra={
+                                        "output_file": output_filepath,
+                                        "error": str(e)
+                                    }
+                                )
+                                raise
+                        
+                        # Create IPv6 file
+                        ipv6_rules = {rule for rule in final_rules if rule.startswith("ip-cidr6:")}
+                        if ipv6_rules:
+                            output_filename = f"{policy_lower}_ipv6.txt"
+                            output_filepath = os.path.join(final_output_path, output_filename)
+                            try:
+                                with open(output_filepath, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(sorted(list(ipv6_rules))))
+                                self.logger.debug(
+                                    "Merged directory rules (IPv6)",
+                                    extra={
+                                        "policy": policy,
+                                        "content_type": content_type,
+                                        "rules_count": len(ipv6_rules),
+                                        "output_file": output_filepath
+                                    }
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    "Failed to write final rule file (IPv6)",
+                                    extra={
+                                        "output_file": output_filepath,
+                                        "error": str(e)
+                                    }
+                                )
+                                raise
+                        # Skip the default write since we've already written separate files
+                        return
+                    elif has_ipv6:
+                        # Only IPv6 rules
+                        output_filename = f"{policy_lower}_ipv6.txt"
+                    else:
+                        # Only IPv4 rules (or mixed but we'll treat as IPv4 for backward compatibility)
+                        output_filename = f"{policy_lower}_ipv4.txt"
+                else:
+                    output_filename = f"{policy_lower}_{content_type}.txt"
                 
-                # Write final file
-                output_filename = f"{content_type}.list"
-                output_filepath = os.path.join(output_dir, output_filename)
+                # Full output file path
+                output_filepath = os.path.join(final_output_path, output_filename)
                 
                 try:
                     with open(output_filepath, 'w', encoding='utf-8') as f:
