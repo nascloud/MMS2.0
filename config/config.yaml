@@ -17,8 +17,8 @@ api_retry_config:
   jitter: true            # 是否添加抖动
 
 # 监控配置
-polling_interval: 2       # 轮询 Mihomo API 变化的时间间隔（秒）
-debounce_interval: 0.5    # 变化后触发操作前的等待时间（秒）
+polling_interval: 10      # 轮询 Mihomo API 变化的时间间隔（秒）- 增加到10秒以减少误触发
+debounce_interval: 2      # 变化后触发操作前的等待时间（秒）- 增加到2秒以过滤临时波动
 
 # Mosdns 配置
 # 生成的 Mosdns 规则文件将保存在此目录中

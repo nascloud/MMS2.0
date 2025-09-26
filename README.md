@@ -13,13 +13,15 @@
 - **原子化操作**: 配置文件写入和重载操作保证原子性
 - **规则集支持**: 支持解析 Mihomo 的 rule-providers 规则集
 - **两阶段架构**: 采用分发-合并的两阶段规则生成架构，提高可维护性和可调试性
+- **动态策略组识别**: 自动识别各种类型的策略组，包括自定义类型如 LoadBalance 和 Relay
+- **智能状态检测**: 仅在最终出口策略（DIRECT/PROXY/REJECT）发生变化时触发规则生成
 
 ## 工作原理
 
 服务通过"轮询-比对-生成-重载"的工作流程实现自动化同步：
 
 1. **定时轮询**: 以固定间隔轮询 Mihomo API 获取策略状态
-2. **深度比对**: 通过哈希摘要比对精确检测状态变化
+2. **智能比对**: 使用PolicyResolver解析策略组的最终出口，仅当DIRECT/PROXY/REJECT分类发生变化时才触发更新
 3. **防抖处理**: 使用防抖机制平滑处理连续变化
 4. **规则生成**: 采用两阶段架构生成对应的 Mosdns 规则文件
    - **阶段一（分发）**: RuleGenerationOrchestrator 从 Mihomo API 获取数据并生成结构化的中间文件
@@ -77,8 +79,8 @@ api_retry_config:
   jitter: true            # 是否添加抖动
 
 # 监控配置
-polling_interval: 2       # 轮询间隔(秒)
-debounce_interval: 0.5    # 防抖间隔(秒)
+polling_interval: 10      # 轮询间隔(秒) - 增加到10秒以减少误触发
+debounce_interval: 2      # 防抖间隔(秒) - 增加到2秒以过滤临时波动
 
 # Mosdns 配置
 mosdns_config_path: "/etc/mosdns/rules/mihomo_generated.list"  # 生成的规则文件路径

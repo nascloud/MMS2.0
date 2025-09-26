@@ -7,6 +7,7 @@ import time
 from typing import Dict, Any, Optional
 from mihomo_sync.modules.rule_generation_orchestrator import RuleGenerationOrchestrator
 from mihomo_sync.modules.rule_merger import RuleMerger
+from mihomo_sync.modules.policy_resolver import PolicyResolver
 
 
 class StateMonitor:
@@ -43,6 +44,7 @@ class StateMonitor:
         self.logger = logging.getLogger(__name__)
         self._last_state_hash = None
         self._debounce_task = None
+        self.policy_resolver = PolicyResolver()
         self.logger.debug(
             "状态监控器初始化完成",
             extra={
@@ -72,28 +74,40 @@ class StateMonitor:
             rule_providers_data = await self.api_client.get_rule_providers()
             providers_duration = time.time() - providers_start
             
-            # 创建仅包含基本信息的状态快照
+            # 创建仅包含重要信息的状态快照
             state_snapshot = {
                 "proxies": {},
                 "rule_providers": {}
             }
             
-            # 提取代理信息（策略组及其当前选择）
+            # 提取代理信息（仅关注策略组的最终解析结果DIRECT/PROXY/REJECT的分类有没有变化）
             proxy_count = 0
             for name, proxy in proxies_data.get("proxies", {}).items():
-                if proxy.get("type") in ["Selector", "Fallback"]:
-                    state_snapshot["proxies"][name] = {
-                        "name": name,
-                        "now": proxy.get("now")
-                    }
-                    proxy_count += 1
+                proxy_type = proxy.get("type")
+                # 识别策略组类型
+                is_strategy_group = self._is_strategy_group(proxy)
+                
+                # 如果是策略组，使用PolicyResolver解析其最终出口
+                if is_strategy_group:
+                    # 获取当前选择
+                    now = proxy.get("now")
+                    if now:
+                        # 使用PolicyResolver解析最终出口
+                        resolved_policy = self.policy_resolver.resolve(now, proxies_data)
+                        state_snapshot["proxies"][name] = {
+                            "name": name,
+                            "resolved_policy": resolved_policy  # 存储解析后的标准化策略
+                        }
+                        proxy_count += 1
             
-            # 提取规则提供者信息（名称和更新时间）
+            # 提取规则提供者信息（仅关注name和updatedAt字段）
             provider_count = 0
             for name, provider in rule_providers_data.get("providers", {}).items():
+                # 只提取关键字段，忽略可能频繁变化的字段
                 state_snapshot["rule_providers"][name] = {
                     "name": name,
-                    "updatedAt": provider.get("updatedAt")
+                    "updatedAt": provider.get("updatedAt"),
+                    "vehicleType": provider.get("vehicleType")  # 添加vehicleType以区分不同类型的提供者
                 }
                 provider_count += 1
             
@@ -129,6 +143,28 @@ class StateMonitor:
                 }
             )
             raise
+
+    def _is_strategy_group(self, proxy_data: Dict[str, Any]) -> bool:
+        """
+        判断代理数据是否为策略组。
+        
+        Args:
+            proxy_data (dict): 代理数据
+            
+        Returns:
+            bool: 如果是策略组返回True，否则返回False
+        """
+        proxy_type = proxy_data.get("type", "").lower()
+        # 策略组类型包括select, fallback, url-test, load-balance, relay等
+        # 同时包括一些可能的变体如loadbalance(无连字符)
+        strategy_group_types = [
+            "select", "selector",  # 选择器
+            "fallback",  # 自动回退
+            "url-test", "urltest",  # 自动选择
+            "load-balance", "loadbalance",  # 负载均衡
+            "relay"  # 链式代理
+        ]
+        return bool(proxy_type and proxy_type in strategy_group_types)
 
     async def start(self):
         """启动监控循环。"""
