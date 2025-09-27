@@ -374,21 +374,21 @@ class RuleGenerationOrchestrator:
             ipv6_rules = set()
             
             for rule_item in content_list:
-                # 首先检查是否为IP规则（直接CIDR格式）
-                if "/" in rule_item:  # IP CIDR规则通常包含"/"
+                # 检查是否为IP CIDR规则（包含"/"）
+                if "/" in rule_item:
                     # 检查是否为IPv6规则（包含":"但不包含"."）
                     if ":" in rule_item and "." not in rule_item:
                         ipv6_rules.add(rule_item)
                     # 检查是否为IPv4规则（包含"."）
                     elif "." in rule_item:
                         ipv4_rules.add(rule_item)
-                    # 其他包含"/"的规则暂时归类为IPv4（以避免遗漏）
+                    # 其他包含"/"的规则暂时归类为IPv4
                     else:
                         ipv4_rules.add(rule_item)
-                # 如果不是IP规则，则检查是否为域名规则
+                # 检查是否为MosDNS格式的域名规则
                 elif rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
                     domain_rules.add(rule_item)
-                # 其他规则暂时归类为域名规则（或可扩展其他类型）
+                # 其他类型规则（如纯域名或通配符）也归类为域名规则
                 else:
                     domain_rules.add(rule_item)
             
