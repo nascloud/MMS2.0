@@ -161,4 +161,8 @@ cython_debug/
 tests/
 test*
 *.list
+output_intermediate/
+output/
+cache/
+logs/
 
