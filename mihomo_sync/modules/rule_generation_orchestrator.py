@@ -385,9 +385,23 @@ class RuleGenerationOrchestrator:
             if domain_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault(provider_name, set()).update(domain_rules)
             
-            # 如果有任何ipcidr规则，则添加到聚合器
-            if ipcidr_rules:
-                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault(provider_name, set()).update(ipcidr_rules)
+            # 检查并分离IPv4和IPv6规则
+            ipv4_rules = set()
+            ipv6_rules = set()
+            
+            for rule in ipcidr_rules:
+                if ":" in rule and "." not in rule:  # IPv6规则
+                    ipv6_rules.add(rule)
+                else:  # IPv4规则
+                    ipv4_rules.add(rule)
+            
+            # 如果有任何IPv4规则，则添加到IPv4聚合器
+            if ipv4_rules:
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv4", {}).setdefault(provider_name, set()).update(ipv4_rules)
+                
+            # 如果有任何IPv6规则，则添加到IPv6聚合器
+            if ipv6_rules:
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv6", {}).setdefault(provider_name, set()).update(ipv6_rules)
             
             self.logger.debug(
                 f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipcidr_rules)} 个ipcidr规则，策略为 {resolved_policy}",
@@ -454,9 +468,15 @@ class RuleGenerationOrchestrator:
                 # 根据内容类型确定要使用的聚合器
                 if content_type == "domain":
                     aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(mosdns_rule)
-                elif content_type in ["ipv4", "ipv6", "ipcidr"]:
-                    # 对于IPv4和IPv6，统一处理为ipcidr
-                    aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault("single_rules", set()).add(mosdns_rule)
+                elif content_type == "ipcidr":
+                    # 对于IP CIDR规则，需要进一步区分IPv4和IPv6
+                    if ":" in mosdns_rule and "." not in mosdns_rule:  # IPv6规则
+                        aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv6", {}).setdefault("single_rules", set()).add(mosdns_rule)
+                    else:  # IPv4规则
+                        aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv4", {}).setdefault("single_rules", set()).add(mosdns_rule)
+                elif content_type in ["ipv4", "ipv6"]:
+                    # 如果RuleConverter已经明确指定了IPv4或IPv6
+                    aggregated_rules.setdefault(resolved_policy, {}).setdefault(content_type, {}).setdefault("single_rules", set()).add(mosdns_rule)
             
             self.logger.debug(
                 f"已处理单个规则: 类型={rule.get('type', '')}, 策略={resolved_policy}",

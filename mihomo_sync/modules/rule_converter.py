@@ -134,6 +134,11 @@ class RuleConverter:
         elif rule_type in ip_types:
             if rule_type == "IP-CIDR6":
                 return "ipv6"
+            elif rule_type == "IP-SUFFIX":
+                # IP-SUFFIX可能是IPv4或IPv6，需要根据内容判断
+                # 但由于我们只在这里处理类型名称，返回通用的ipcidr
+                # 实际区分将在RuleGenerationOrchestrator中完成
+                return "ipcidr"
             else:
                 return "ipv4"
         else:
