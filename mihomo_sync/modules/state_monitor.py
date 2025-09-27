@@ -17,7 +17,8 @@ class StateMonitor:
                  polling_interval: float, debounce_interval: float,
                  mihomo_config_parser=None, mihomo_config_path: str = "",
                  orchestrator: Optional[RuleGenerationOrchestrator] = None, 
-                 merger: Optional[RuleMerger] = None):
+                 merger: Optional[RuleMerger] = None,
+                 downloader=None):
         """
         初始化StateMonitor。
         
@@ -31,6 +32,7 @@ class StateMonitor:
             mihomo_config_path (str): Mihomo配置文件的路径
             orchestrator: RuleGenerationOrchestrator实例
             merger: RuleMerger实例
+            downloader: RuleDownloader实例（可选）
         """
         self.api_client = api_client
         self.mosdns_controller = mosdns_controller
@@ -41,6 +43,7 @@ class StateMonitor:
         self.mihomo_config_path = mihomo_config_path
         self.orchestrator = orchestrator
         self.merger = merger
+        self.downloader = downloader
         self.logger = logging.getLogger(__name__)
         self._last_state_hash = None
         self._last_state_snapshot = None

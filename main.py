@@ -8,6 +8,7 @@ import os
 import signal
 import sys
 import time
+import aiohttp
 from typing import Optional
 from mihomo_sync.logger import setup_logger
 from mihomo_sync.config import ConfigManager
@@ -17,6 +18,7 @@ from mihomo_sync.modules.state_monitor import StateMonitor
 from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
 from mihomo_sync.modules.rule_generation_orchestrator import RuleGenerationOrchestrator
 from mihomo_sync.modules.rule_merger import RuleMerger
+from mihomo_sync.modules.rule_downloader import RuleDownloader
 
 
 class MihomoMosdnsSyncService:
@@ -32,10 +34,11 @@ class MihomoMosdnsSyncService:
         self.state_monitor: Optional[StateMonitor] = None
         self.rule_orchestrator: Optional[RuleGenerationOrchestrator] = None
         self.rule_merger: Optional[RuleMerger] = None
+        self.downloader: Optional[RuleDownloader] = None
         self.shutdown_event = asyncio.Event()
         self.start_time = None
 
-    async def initialize(self):
+    async def initialize(self, session=None):
         """初始化服务的所有组件。"""
         self.logger.info("正在初始化Mihomo-Mosdns同步服务")
         self.start_time = time.time()
@@ -102,6 +105,12 @@ class MihomoMosdnsSyncService:
             
             self.logger.debug("规则处理组件初始化完成")
             
+            # 初始化规则下载器
+            self.downloader = RuleDownloader(
+                cache_dir="cache",
+                session=session
+            )
+            
             # 使用新组件初始化状态监控器
             self.state_monitor = StateMonitor(
                 api_client=self.api_client,
@@ -112,7 +121,8 @@ class MihomoMosdnsSyncService:
                 mihomo_config_parser=self.mihomo_config_parser,
                 mihomo_config_path=self.config_manager.get_mihomo_config_path(),
                 orchestrator=self.rule_orchestrator,
-                merger=self.rule_merger
+                merger=self.rule_merger,
+                downloader=self.downloader
             )
             
             self.logger.debug(
@@ -237,14 +247,14 @@ class MihomoMosdnsSyncService:
         
         return True
 
-    async def start(self):
+    async def start(self, session=None):
         """启动同步服务。"""
         start_time = time.time()
         self.logger.info("正在启动同步服务")
         
         try:
             # 初始化服务
-            await self.initialize()
+            await self.initialize(session)
             
             # 执行健康检查
             if not await self.health_check():
@@ -331,9 +341,10 @@ class MihomoMosdnsSyncService:
 
 async def main():
     """主异步函数。"""
-    service = MihomoMosdnsSyncService()
-    exit_code = await service.start()
-    return exit_code
+    async with aiohttp.ClientSession() as session:
+        service = MihomoMosdnsSyncService()
+        exit_code = await service.start(session)
+        return exit_code
 
 
 if __name__ == "__main__":

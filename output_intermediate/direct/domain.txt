@@ -1,3 +1,4 @@
+and:((SrcIPCIDR,192.168.50.0/24) && (IPCIDR,192.168.50.0/24))
 domain:0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.0.ip6.arpa
 domain:0.in-addr.arpa
 domain:0.zone
@@ -11748,10 +11749,12 @@ domain:anijue.com
 domain:animalchina.com
 domain:animationcritics.com
 domain:animebytes.tv
+domain:animetamashi.cn
 domain:animetamashi.com
 domain:animetaste.net
 domain:animetorrents.me
 domain:anischools.com
+domain:anitama.cn
 domain:anitama.net
 domain:aniu.com
 domain:aniu.so
@@ -15576,6 +15579,8 @@ domain:bigerwall.com
 domain:bigeshuju.com
 domain:bigesj.com
 domain:bigeyes.com
+domain:bigfun.cn
+domain:bigfunapp.cn
 domain:biggerlens.com
 domain:biggeryun.com
 domain:bigherdsman.com
@@ -15640,20 +15645,27 @@ domain:bilalipay.com
 domain:bilandtech.com
 domain:bilezu.com
 domain:bilfinance.com
+domain:bili22.cn
+domain:bili2233.cn
+domain:bili23.cn
+domain:bili33.cn
 domain:biliapi.com
 domain:biliapi.net
 domain:biliapi.xyz
 domain:bilibil.com
 domain:bilibili.cc
+domain:bilibili.cn
 domain:bilibili.co
 domain:bilibili.com
 domain:bilibili.li
 domain:bilibili.net
 domain:bilibili.tv
 domain:bilibili996.com
+domain:bilibiligame.cn
 domain:bilibiligame.co
 domain:bilibiligame.net
 domain:bilibilihelper.com
+domain:bilibilipay.cn
 domain:bilibilipay.com
 domain:bilicdn1.com
 domain:bilicdn2.com
@@ -15677,6 +15689,7 @@ domain:bilinovel.com
 domain:biliplus.com
 domain:biliui.com
 domain:bilive.com
+domain:bilivideo.cn
 domain:bilivideo.com
 domain:bilivideo.net
 domain:biliyu.com
@@ -66843,6 +66856,7 @@ domain:manfen.net
 domain:manfen5.com
 domain:manfred-auto.com
 domain:manfrottoclub.com
+domain:manga.bilibili.com
 domain:mangafuna.xyz
 domain:manganesenanhai.com
 domain:mangg.com
@@ -117108,4 +117122,3 @@ domain:zzzyy.com
 domain:zzzyyy.com
 domain:zzzzaaaa.com
 domain:zzzzzz.me
-keyword:speedtest
