@@ -368,30 +368,13 @@ class RuleGenerationOrchestrator:
                 f"规则集 {provider_name} 包含 {len(content_list)} 条规则"
             )
             
-            # 分离域名和ipcidr规则
+            # 分离域名规则和IP规则
             domain_rules = set()
-            ipcidr_rules = set()
-            
-            for rule_item in content_list:
-                if rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
-                    domain_rules.add(rule_item)
-                elif "/" in rule_item and (any(c in rule_item for c in [".", ":"])):  # IP规则通常包含"/"和IP地址字符
-                    ipcidr_rules.add(rule_item)
-                else:
-                    # 对于未知类型默认为域名规则
-                    domain_rules.add(rule_item)
-            
-            # 如果有任何域名规则，则添加到聚合器
-            if domain_rules:
-                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault(provider_name, set()).update(domain_rules)
-            
-            # 检查并分离IPv4和IPv6规则
             ipv4_rules = set()
             ipv6_rules = set()
             
             for rule_item in content_list:
-                # 识别IP规则：对于Mosdns格式的IP规则（直接IP/CIDR格式）
-                # 或者包含"/"且符合IP格式的规则
+                # 首先检查是否为IP规则（直接CIDR格式）
                 if "/" in rule_item:  # IP CIDR规则通常包含"/"
                     # 检查是否为IPv6规则（包含":"但不包含"."）
                     if ":" in rule_item and "." not in rule_item:
@@ -399,7 +382,15 @@ class RuleGenerationOrchestrator:
                     # 检查是否为IPv4规则（包含"."）
                     elif "." in rule_item:
                         ipv4_rules.add(rule_item)
-                    # 对于其他包含"/"的规则，暂时不归类为IP规则，避免误分类
+                    # 其他包含"/"的规则暂时归类为IPv4（以避免遗漏）
+                    else:
+                        ipv4_rules.add(rule_item)
+                # 如果不是IP规则，则检查是否为域名规则
+                elif rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
+                    domain_rules.add(rule_item)
+                # 其他规则暂时归类为域名规则（或可扩展其他类型）
+                else:
+                    domain_rules.add(rule_item)
             
             # 如果有任何IPv4规则，则添加到IPv4聚合器
             if ipv4_rules:
