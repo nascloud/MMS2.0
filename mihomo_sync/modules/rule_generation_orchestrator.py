@@ -389,11 +389,16 @@ class RuleGenerationOrchestrator:
             ipv4_rules = set()
             ipv6_rules = set()
             
-            for rule in ipcidr_rules:
-                if ":" in rule and "." not in rule:  # IPv6规则
-                    ipv6_rules.add(rule)
-                else:  # IPv4规则
-                    ipv4_rules.add(rule)
+            for rule_item in content_list:
+                # 需要更精确地判断是否为IP规则（包含CIDR格式）
+                if "/" in rule_item:  # IP CIDR规则通常包含"/"
+                    if ":" in rule_item and "." not in rule_item:  # IPv6规则
+                        ipv6_rules.add(rule_item)
+                    elif "." in rule_item:  # IPv4规则
+                        ipv4_rules.add(rule_item)
+                    # 其他包含"/"但既不是IPv4也不是IPv6的规则，我们暂时归类为IPv4规则
+                    else:
+                        ipv4_rules.add(rule_item)
             
             # 如果有任何IPv4规则，则添加到IPv4聚合器
             if ipv4_rules:
