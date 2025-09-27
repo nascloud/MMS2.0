@@ -81,65 +81,62 @@ class RuleMerger:
             if not files:
                 continue
             
-            # 从目录结构确定策略和内容类型
+            # 从目录结构确定策略
             rel_path = os.path.relpath(root, intermediate_path)
             path_parts = rel_path.split(os.sep)
             
-            # 我们期望的路径结构为: policy/content_type
-            if len(path_parts) != 2:
-                continue
-                
-            policy, content_type = path_parts
-            
-            # 合并此目录中的规则
-            self._merge_directory_rules(root, policy, content_type, final_output_path)
+            # 检查是否是策略目录（如 direct, proxy, reject）
+            if len(path_parts) == 1:
+                policy = path_parts[0]
+                # 处理此策略目录下的所有文件
+                for file in files:
+                    if file.endswith('.txt'):
+                        # 提取内容类型（如 domain, ipv4, ipv6）
+                        content_type = file[:-4]  # 去掉 .txt 扩展名
+                        file_path = os.path.join(root, file)
+                        # 合并此文件中的规则
+                        self._merge_file_rules(file_path, policy, content_type, final_output_path)
     
-    def _merge_directory_rules(self, directory_path: str, policy: str, content_type: str, final_output_path: str) -> None:
+    def _merge_file_rules(self, file_path: str, policy: str, content_type: str, final_output_path: str) -> None:
         """
-        合并特定目录中的所有规则。
+        合并特定文件中的规则。
         
         Args:
-            directory_path (str): 包含规则文件的目录路径
+            file_path (str): 规则文件的路径
             policy (str): 策略名称
-            content_type (str): 内容类型 (domain, ipcidr等)
+            content_type (str): 内容类型 (domain, ipv4, ipv6等)
             final_output_path (str): 最终输出目录路径
         """
         try:
-            # 步骤1：从.list文件收集所有规则
+            # 步骤1：从文件收集所有规则
             final_rules: Set[str] = set()
             
-            for filename in os.listdir(directory_path):
-                if filename.endswith(".list"):
-                    filepath = os.path.join(directory_path, filename)
-                    try:
-                        with open(filepath, 'r', encoding='utf-8') as f:
-                            lines = [line.strip() for line in f.readlines() if line.strip()]
-                            final_rules.update(lines)
-                    except Exception as e:
-                        self.logger.warning(
-                            "读取规则文件失败",
-                            extra={
-                                "rule_file": filepath,
-                                "error": str(e)
-                            }
-                        )
-            
+            try:
+                with open(file_path, 'r', encoding='utf-8') as f:
+                    lines = [line.strip() for line in f.readlines() if line.strip()]
+                    final_rules.update(lines)
+            except Exception as e:
+                self.logger.warning(
+                    "读取规则文件失败",
+                    extra={
+                        "rule_file": file_path,
+                        "error": str(e)
+                    }
+                )
+        
             # 步骤2：如果非空则写入最终规则
             if final_rules:
                 # 根据策略和内容类型创建平面文件名
-                # 转换为小写并替换内容类型映射
                 policy_lower = policy.lower()
-                if content_type == "domain":
-                    output_filename = f"{policy_lower}_domain.txt"
-                elif content_type == "ipcidr":
-                    # 检查集合中是否有IPv6规则
-                    # IPv6地址包含":"但不包含"."，IPv4地址包含"."
+                
+                # 对于IPv4类型的特殊处理：如果内容中包含IPv6规则，需要拆分
+                if content_type == "ipv4":
+                    # 检查内容中是否有IPv6规则
                     has_ipv6 = any(":" in rule and "." not in rule for rule in final_rules)
                     has_ipv4 = any("." in rule for rule in final_rules)
                     
-                    # 如果我们同时有IPv4和IPv6规则，则创建单独的文件
+                    # 如果同时有IPv4和IPv6规则，则需要分离
                     if has_ipv6 and has_ipv4:
-                        # 创建IPv4文件
                         ipv4_rules = {rule for rule in final_rules if "." in rule}
                         if ipv4_rules:
                             output_filename = f"{policy_lower}_ipv4.txt"
@@ -148,7 +145,7 @@ class RuleMerger:
                                 with open(output_filepath, 'w', encoding='utf-8') as f:
                                     f.write('\n'.join(sorted(list(ipv4_rules))))
                                 self.logger.debug(
-                                    "合并目录规则 (IPv4)",
+                                    "合并文件规则 (IPv4)",
                                     extra={
                                         "policy": policy,
                                         "content_type": content_type,
@@ -175,7 +172,7 @@ class RuleMerger:
                                 with open(output_filepath, 'w', encoding='utf-8') as f:
                                     f.write('\n'.join(sorted(list(ipv6_rules))))
                                 self.logger.debug(
-                                    "合并目录规则 (IPv6)",
+                                    "合并文件规则 (IPv6)",
                                     extra={
                                         "policy": policy,
                                         "content_type": content_type,
@@ -192,28 +189,31 @@ class RuleMerger:
                                     }
                                 )
                                 raise
-                        # 跳过默认写入，因为我们已经写入了单独的文件
-                        return
-                    elif has_ipv6:
-                        # 仅IPv6规则
-                        output_filename = f"{policy_lower}_ipv6.txt"
                     else:
-                        # 仅IPv4规则
-                        output_filename = f"{policy_lower}_ipv4.txt"
-                elif content_type in ["ipv4", "ipv6"]:
-                    # 已经分离的IPv4或IPv6规则
+                        # 只有一类IP规则，直接写入
+                        output_filename = f"{policy_lower}_{content_type}.txt"
+                        output_filepath = os.path.join(final_output_path, output_filename)
+                        
+                        with open(output_filepath, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(sorted(list(final_rules))))
+                        self.logger.debug(
+                            "合并文件规则",
+                            extra={
+                                "policy": policy,
+                                "content_type": content_type,
+                                "rules_count": len(final_rules),
+                                "output_file": output_filepath
+                            }
+                        )
+                elif content_type == "domain":
+                    # 域名规则直接写入
                     output_filename = f"{policy_lower}_{content_type}.txt"
-                else:
-                    output_filename = f"{policy_lower}_{content_type}.txt"
-                
-                # 完整的输出文件路径
-                output_filepath = os.path.join(final_output_path, output_filename)
-                
-                try:
+                    output_filepath = os.path.join(final_output_path, output_filename)
+                    
                     with open(output_filepath, 'w', encoding='utf-8') as f:
                         f.write('\n'.join(sorted(list(final_rules))))
                     self.logger.debug(
-                        "合并目录规则",
+                        "合并文件规则",
                         extra={
                             "policy": policy,
                             "content_type": content_type,
@@ -221,20 +221,119 @@ class RuleMerger:
                             "output_file": output_filepath
                         }
                     )
-                except Exception as e:
-                    self.logger.error(
-                        "写入最终规则文件失败",
+                elif content_type == "ipcidr":
+                    # 检查内容中是否有IPv6规则
+                    has_ipv6 = any(":" in rule and "." not in rule for rule in final_rules)
+                    has_ipv4 = any("." in rule for rule in final_rules)
+                    
+                    # 如果我们同时有IPv4和IPv6规则，则创建单独的文件
+                    if has_ipv6 and has_ipv4:
+                        # 创建IPv4文件
+                        ipv4_rules = {rule for rule in final_rules if "." in rule}
+                        if ipv4_rules:
+                            output_filename = f"{policy_lower}_ipv4.txt"
+                            output_filepath = os.path.join(final_output_path, output_filename)
+                            try:
+                                with open(output_filepath, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(sorted(list(ipv4_rules))))
+                                self.logger.debug(
+                                    "合并文件规则 (IPv4)",
+                                    extra={
+                                        "policy": policy,
+                                        "content_type": content_type,
+                                        "rules_count": len(ipv4_rules),
+                                        "output_file": output_filepath
+                                    }
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    "写入最终规则文件失败 (IPv4)",
+                                    extra={
+                                        "output_file": output_filepath,
+                                        "error": str(e)
+                                    }
+                                )
+                                raise
+                        
+                        # 创建IPv6文件
+                        ipv6_rules = {rule for rule in final_rules if ":" in rule and "." not in rule}
+                        if ipv6_rules:
+                            output_filename = f"{policy_lower}_ipv6.txt"
+                            output_filepath = os.path.join(final_output_path, output_filename)
+                            try:
+                                with open(output_filepath, 'w', encoding='utf-8') as f:
+                                    f.write('\n'.join(sorted(list(ipv6_rules))))
+                                self.logger.debug(
+                                    "合并文件规则 (IPv6)",
+                                    extra={
+                                        "policy": policy,
+                                        "content_type": content_type,
+                                        "rules_count": len(ipv6_rules),
+                                        "output_file": output_filepath
+                                    }
+                                )
+                            except Exception as e:
+                                self.logger.error(
+                                    "写入最终规则文件失败 (IPv6)",
+                                    extra={
+                                        "output_file": output_filepath,
+                                        "error": str(e)
+                                    }
+                                )
+                                raise
+                    elif has_ipv6:
+                        # 仅IPv6规则
+                        output_filename = f"{policy_lower}_ipv6.txt"
+                        output_filepath = os.path.join(final_output_path, output_filename)
+                        
+                        with open(output_filepath, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(sorted(list(final_rules))))
+                        self.logger.debug(
+                            "合并文件规则",
+                            extra={
+                                "policy": policy,
+                                "content_type": content_type,
+                                "rules_count": len(final_rules),
+                                "output_file": output_filepath
+                            }
+                        )
+                    else:
+                        # 仅IPv4规则
+                        output_filename = f"{policy_lower}_ipv4.txt"
+                        output_filepath = os.path.join(final_output_path, output_filename)
+                        
+                        with open(output_filepath, 'w', encoding='utf-8') as f:
+                            f.write('\n'.join(sorted(list(final_rules))))
+                        self.logger.debug(
+                            "合并文件规则",
+                            extra={
+                                "policy": policy,
+                                "content_type": content_type,
+                                "rules_count": len(final_rules),
+                                "output_file": output_filepath
+                            }
+                        )
+                else:
+                    # 其他内容类型直接写入
+                    output_filename = f"{policy_lower}_{content_type}.txt"
+                    output_filepath = os.path.join(final_output_path, output_filename)
+                    
+                    with open(output_filepath, 'w', encoding='utf-8') as f:
+                        f.write('\n'.join(sorted(list(final_rules))))
+                    self.logger.debug(
+                        "合并文件规则",
                         extra={
-                            "output_file": output_filepath,
-                            "error": str(e)
+                            "policy": policy,
+                            "content_type": content_type,
+                            "rules_count": len(final_rules),
+                            "output_file": output_filepath
                         }
                     )
-                    raise
         except Exception as e:
             self.logger.error(
-                "合并目录规则失败",
+                "合并文件规则失败",
                 extra={
-                    "directory_path": directory_path,
+                    "file_path": file_path,
                     "policy": policy,
                     "content_type": content_type,
                     "final_output_path": final_output_path,
