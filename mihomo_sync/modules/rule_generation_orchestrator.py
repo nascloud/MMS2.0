@@ -390,15 +390,16 @@ class RuleGenerationOrchestrator:
             ipv6_rules = set()
             
             for rule_item in content_list:
-                # 需要更精确地判断是否为IP规则（包含CIDR格式）
+                # 识别IP规则：对于Mosdns格式的IP规则（直接IP/CIDR格式）
+                # 或者包含"/"且符合IP格式的规则
                 if "/" in rule_item:  # IP CIDR规则通常包含"/"
-                    if ":" in rule_item and "." not in rule_item:  # IPv6规则
+                    # 检查是否为IPv6规则（包含":"但不包含"."）
+                    if ":" in rule_item and "." not in rule_item:
                         ipv6_rules.add(rule_item)
-                    elif "." in rule_item:  # IPv4规则
+                    # 检查是否为IPv4规则（包含"."）
+                    elif "." in rule_item:
                         ipv4_rules.add(rule_item)
-                    # 其他包含"/"但既不是IPv4也不是IPv6的规则，我们暂时归类为IPv4规则
-                    else:
-                        ipv4_rules.add(rule_item)
+                    # 对于其他包含"/"的规则，暂时不归类为IP规则，避免误分类
             
             # 如果有任何IPv4规则，则添加到IPv4聚合器
             if ipv4_rules:
