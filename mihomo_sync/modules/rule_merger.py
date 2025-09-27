@@ -200,6 +200,9 @@ class RuleMerger:
                     else:
                         # 仅IPv4规则
                         output_filename = f"{policy_lower}_ipv4.txt"
+                elif content_type in ["ipv4", "ipv6"]:
+                    # 已经分离的IPv4或IPv6规则
+                    output_filename = f"{policy_lower}_{content_type}.txt"
                 else:
                     output_filename = f"{policy_lower}_{content_type}.txt"
                 
