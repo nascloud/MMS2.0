@@ -375,8 +375,7 @@ class RuleGenerationOrchestrator:
             for rule_item in content_list:
                 if rule_item.startswith(("domain:", "full:", "keyword:", "regexp:")):
                     domain_rules.add(rule_item)
-                elif rule_item.startswith(("ip-cidr:", "ip-cidr6:")) or any(c in rule_item for c in [".", ":"]) and "/" in rule_item:
-                    # IP-CIDR规则通常包含"."或":"和"/"
+                elif "/" in rule_item and (any(c in rule_item for c in [".", ":"])):  # IP规则通常包含"/"和IP地址字符
                     ipcidr_rules.add(rule_item)
                 else:
                     # 对于未知类型默认为域名规则
@@ -447,25 +446,23 @@ class RuleGenerationOrchestrator:
                 )
                 return
             
-            # 根据规则类型进行处理
-            rule_type = rule.get("type", "").lower()
-            rule_payload = rule.get("payload", "")
+            # 使用RuleConverter转换规则，这会处理我们支持的规则类型
+            mosdns_rule, content_type = RuleConverter.convert_single_rule(rule)
             
-            if rule_type in ["domain", "full", "keyword", "regexp"]:
-                # 域名规则
-                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
-            elif rule_type in ["ip-cidr", "ip-cidr6"]:
-                # IP CIDR规则
-                aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
-            else:
-                # 其他类型的规则默认处理为域名规则
-                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(f"{rule_type}:{rule_payload}")
+            # 如果转换成功，则处理转换后的规则
+            if mosdns_rule and content_type:
+                # 根据内容类型确定要使用的聚合器
+                if content_type == "domain":
+                    aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault("single_rules", set()).add(mosdns_rule)
+                elif content_type in ["ipv4", "ipv6", "ipcidr"]:
+                    # 对于IPv4和IPv6，统一处理为ipcidr
+                    aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipcidr", {}).setdefault("single_rules", set()).add(mosdns_rule)
             
             self.logger.debug(
-                f"已处理单个规则: 类型={rule_type}, 策略={resolved_policy}",
+                f"已处理单个规则: 类型={rule.get('type', '')}, 策略={resolved_policy}",
                 extra={
-                    "rule_type": rule_type,
-                    "payload": rule_payload,
+                    "rule_type": rule.get("type", ""),
+                    "payload": rule.get("payload", ""),
                     "resolved_policy": resolved_policy
                 }
             )
