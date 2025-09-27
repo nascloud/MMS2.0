@@ -401,11 +401,12 @@ class RuleGenerationOrchestrator:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv6", {}).setdefault(provider_name, set()).update(ipv6_rules)
             
             self.logger.debug(
-                f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipcidr_rules)} 个ipcidr规则，策略为 {resolved_policy}",
+                f"已处理RULE-SET规则: {provider_name} -> {len(domain_rules)} 个域名规则, {len(ipv4_rules)} 个IPv4规则, {len(ipv6_rules)} 个IPv6规则，策略为 {resolved_policy}",
                 extra={
                     "provider_name": provider_name,
                     "domain_rules_count": len(domain_rules),
-                    "ipcidr_rules_count": len(ipcidr_rules),
+                    "ipv4_rules_count": len(ipv4_rules),
+                    "ipv6_rules_count": len(ipv6_rules),
                     "resolved_policy": resolved_policy
                 }
             )
