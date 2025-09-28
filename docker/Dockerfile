@@ -83,7 +83,7 @@ RUN set -e && \
     echo "mosdns installed successfully"
 
 # 复制配置文件到默认配置目录
-COPY ./docker/config.yaml $APP_DIR/config
+COPY ./docker/config.yaml $APP_DIR/config/
 COPY ./docker/mihomo.yaml /default-configs/
 COPY ./docker/mosdns.yaml /default-configs/
 
