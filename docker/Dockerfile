@@ -76,23 +76,28 @@ RUN set -e && \
 # 下载并安装最新版 mosdns (amd64)
 RUN set -e && \
     echo "Getting latest mosdns release..." && \
-    LATEST_MOSDNS=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    RELEASE_JSON=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest") && \
+    echo "Release JSON: $RELEASE_JSON" && \
+    LATEST_MOSDNS=$(echo "$RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
     echo "Latest mosdns version: $LATEST_MOSDNS" && \
     if [ -z "$LATEST_MOSDNS" ]; then echo "Failed to get latest version"; exit 1; fi && \
-    echo "Getting download URL for linux-amd64..." && \
-    DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest" | grep '"browser_download_url":' | grep 'linux-amd64' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
-    echo "Downloading from: $DOWNLOAD_URL" && \
+    DOWNLOAD_URL=$(echo "$RELEASE_JSON" | grep '"browser_download_url":' | grep 'linux-amd64' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    echo "Download URL: $DOWNLOAD_URL" && \
     if [ -z "$DOWNLOAD_URL" ]; then echo "Failed to get download URL"; exit 1; fi && \
     FILENAME=$(basename "$DOWNLOAD_URL") && \
     echo "Downloaded filename: $FILENAME" && \
     curl -L --fail --retry 3 --retry-delay 5 -o "$FILENAME" "$DOWNLOAD_URL" && \
     if echo "$FILENAME" | grep -q '\.gz$'; then \
+        echo "File is gz format, extracting..." && \
         gunzip "$FILENAME" && \
         EXTRACTED_FILE=$(echo "$FILENAME" | sed 's/\.gz$//'); \
     elif echo "$FILENAME" | grep -q '\.zip$'; then \
+        echo "File is zip format, extracting..." && \
         unzip "$FILENAME" && \
-        EXTRACTED_FILE="mosdns"; \
+        EXTRACTED_FILE=$(unzip -l "$FILENAME" | awk '/mosdns/ {print $4; exit}') && \
+        [ -z "$EXTRACTED_FILE" ] && EXTRACTED_FILE="mosdns"; \
     else \
+        echo "File is not compressed, using as is..." && \
         EXTRACTED_FILE="$FILENAME"; \
     fi && \
     echo "Extracted file: $EXTRACTED_FILE" && \
