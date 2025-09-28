@@ -3,9 +3,11 @@ import os
 import shutil
 import time
 from typing import Dict, Any, List, Set, Tuple
+import httpx
 from mihomo_sync.modules.rule_converter import RuleConverter
 from mihomo_sync.modules.policy_resolver import PolicyResolver
 from mihomo_sync.modules.mihomo_config_parser import MihomoConfigParser
+from mihomo_sync.modules.rule_downloader import RuleDownloader
 
 
 class RuleGenerationOrchestrator:
@@ -112,14 +114,19 @@ class RuleGenerationOrchestrator:
                 }
             )
             
-            # 步骤5：初始化内存聚合器
-            # 初始化固定策略的聚合器
-            aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
-            
-            # 步骤6：处理规则
-            self.logger.debug("正在处理规则...")
-            process_start_time = time.time()
-            await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules)
+            # 步骤5：设置环境：创建共享客户端和模块实例
+            async with httpx.AsyncClient() as client:
+                cache_path = os.path.join(self.intermediate_dir, ".cache")
+                downloader = RuleDownloader(client=client, cache_dir=cache_path)
+                
+                # 步骤6：初始化内存聚合器
+                # 初始化固定策略的聚合器
+                aggregated_rules = {policy: {} for policy in self.FIXED_POLICIES}
+
+                # 步骤7：处理规则 (现在会使用新的架构)
+                self.logger.debug("正在处理规则...")
+                process_start_time = time.time()
+                await self._process_rules(rules_data, providers_info, proxies_data, aggregated_rules, downloader)
             process_duration = time.time() - process_start_time
             
             self.logger.debug(
@@ -283,7 +290,8 @@ class RuleGenerationOrchestrator:
     
     async def _process_rules(self, rules_data: Dict[str, Any], providers_info: Dict[str, Any], 
                              proxies_data: Dict[str, Any],
-                             aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
+                             aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]], 
+                             downloader: RuleDownloader) -> None:
         """
         处理所有规则并在内存中聚合它们。
         
@@ -292,6 +300,7 @@ class RuleGenerationOrchestrator:
             providers_info: 所有规则提供者的信息（从API和配置合并）
             proxies_data: 来自Mihomo API的代理数据
             aggregated_rules: 用于固定策略的规则内存聚合器
+            downloader: 规则下载器实例，用于下载和缓存规则集
         """
         self.logger.debug("开始处理规则...")
         start_time = time.time()
@@ -299,24 +308,64 @@ class RuleGenerationOrchestrator:
         rules = rules_data.get("rules", [])
         self.logger.debug(f"共有 {len(rules)} 条规则需要处理")
         
+        # 执行规则处理的核心工作流：
+        # 1. 收集所有RULE-SET的URL
+        # 2. 并发下载所有规则文件到缓存
+        # 3. 从缓存中读取文件进行转换和聚合
+        await self._process_rules_workflow(rules, providers_info, proxies_data, aggregated_rules, downloader)
+        
+        duration = time.time() - start_time
+        self.logger.debug(
+            "规则处理完成",
+            extra={
+                "总规则数": len(rules),
+                "处理耗时_秒": round(duration, 3)
+            }
+        )
+    
+    async def _process_rules_workflow(self, rules: list, providers_info: Dict[str, Any], 
+                                      proxies_data: Dict[str, Any],
+                                      aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]], 
+                                      downloader: RuleDownloader) -> None:
+        """
+        执行规则处理的核心工作流：
+        1. 收集所有RULE-SET的URL。
+        2. 并发下载所有规则文件到缓存。
+        3. 从缓存中读取文件进行转换和聚合。
+        """
+        # --- 阶段 1: 收集所有需要下载的URL ---
+        urls_to_download = set()
+        for rule in rules:
+            if rule.get("type", "").lower() == "ruleset":
+                provider_name = rule.get("payload")
+                if provider_name in providers_info:
+                    provider_info = providers_info[provider_name]
+                    # 假定此处可以从provider_info中解析出最终的URL
+                    url = provider_info.get("url") # 你可能需要实现更复杂的URL解析逻辑
+                    if url:
+                        urls_to_download.add(url)
+        
+        # --- 阶段 2: 命令下载器并发更新所有缓存 ---
+        await downloader.download_rules(list(urls_to_download))
+
+        # --- 阶段 3: 处理和转换 (现在从本地缓存读取) ---
         processed_count = 0
         rule_set_count = 0
         single_rule_count = 0
         
-        # 处理每个规则
         for i, rule in enumerate(rules):
             rule_type = rule.get("type", "")
             
             if rule_type.lower() == "ruleset":
-                # 处理RULE-SET类型规则
-                await self._process_rule_set_rule(rule, providers_info, proxies_data, aggregated_rules)
+                # 处理RULE-SET类型规则（现在从本地缓存读取）
+                await self._process_rule_set_rule(rule, providers_info, proxies_data, aggregated_rules, downloader)
                 rule_set_count += 1
+                processed_count += 1
             else:
                 # 处理单个规则
                 self._process_single_rule(rule, proxies_data, aggregated_rules)
                 single_rule_count += 1
-            
-            processed_count += 1
+                processed_count += 1
             
             # 每处理100条规则记录一次进度
             if processed_count % 100 == 0:
@@ -327,22 +376,11 @@ class RuleGenerationOrchestrator:
                         "single_rule_count": single_rule_count
                     }
                 )
-        
-        duration = time.time() - start_time
-        self.logger.debug(
-            "规则处理完成",
-            extra={
-                "总规则数": len(rules),
-                "已处理规则数": processed_count,
-                "RULE_SET规则数": rule_set_count,
-                "单个规则数": single_rule_count,
-                "处理耗时_秒": round(duration, 3)
-            }
-        )
     
-    async def _process_rule_set_rule(self, rule: Dict[str, Any], providers_info: Dict[str, Any],
+    async def _process_rule_set_rule(self, rule: Dict[str, Any], providers_info: Dict[str, Any], 
                                      proxies_data: Dict[str, Any],
-                                     aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]]) -> None:
+                                     aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]], 
+                                     downloader: RuleDownloader) -> None:
         """
         处理RULE-SET类型规则。
         
@@ -351,6 +389,7 @@ class RuleGenerationOrchestrator:
             providers_info: 所有规则提供者的信息
             proxies_data: 来自Mihomo API的代理数据
             aggregated_rules: 用于固定策略的规则内存聚合器
+            downloader: 规则下载器实例，用于下载和缓存规则集
         """
         try:
             policy = rule.get("proxy") or rule.get("provider", "")
@@ -394,15 +433,19 @@ class RuleGenerationOrchestrator:
                 
             provider_info = providers_info[provider_name]
             
-            # 获取和解析规则集内容
-            self.logger.debug(
-                f"正在获取规则集内容: {provider_name}",
-                extra={
-                    "provider_name": provider_name
-                }
-            )
+            # 从下载器获取缓存路径
+            url = provider_info.get("url")
+            if not url:
+                return
+
+            # 从下载器获取缓存路径
+            local_path = downloader.get_cache_path_for_url(url)
             
-            content_list = RuleConverter.fetch_and_parse_ruleset(provider_info)
+            # 将路径和行为交给转换器
+            content_list = RuleConverter.parse_ruleset_from_file(
+                local_path, 
+                provider_info.get("behavior", "domain")
+            )
             self.logger.debug(
                 f"规则集 {provider_name} 包含 {len(content_list)} 条规则"
             )

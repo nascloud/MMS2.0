@@ -1,7 +1,6 @@
 import logging
 import os
-import httpx
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Callable
 
 
 class RuleConverter:
@@ -63,56 +62,7 @@ class RuleConverter:
             )
             return None, None
     
-    @staticmethod
-    def fetch_and_parse_ruleset(provider_info: Dict[str, Any]) -> List[str]:
-        """
-        获取并解析RULE-SET提供者的内容。
-        
-        Args:
-            provider_info (dict): 关于规则提供者的信息。
-            
-        Returns:
-            list: Mosdns格式的规则列表。
-        """
-        try:
-            format_type = provider_info.get("format", "text")
-            behavior = provider_info.get("behavior", "domain")
-            url = provider_info.get("url", "")
-            path = provider_info.get("path", "")
-            
-            # 处理mrs格式
-            if format_type == "mrs":
-                # 转换mrs格式的URL
-                if behavior.lower() in ["domain", "ipcidr"]:
-                    url = url.replace(".mrs", ".list")
-                elif behavior.lower() == "classical":
-                    url = url.replace(".mrs", ".yaml")
-            
-            # 根据行为处理（不区分大小写比较）
-            behavior_lower = behavior.lower()
-            if behavior_lower == "domain":
-                return RuleConverter._parse_domain_rules(url, path)
-            elif behavior_lower == "ipcidr":
-                return RuleConverter._parse_ipcidr_rules(url, path)
-            elif behavior_lower == "classical":
-                return RuleConverter._parse_classical_rules(url, path)
-            else:
-                logging.getLogger(__name__).warning(
-                    "不支持的行为类型",
-                    extra={
-                        "behavior": behavior
-                    }
-                )
-                return []
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "获取和解析规则集失败",
-                extra={
-                    "provider_info": provider_info,
-                    "error": str(e)
-                }
-            )
-            return []
+    
     
     @staticmethod
     def _determine_content_type(rule_type: str) -> str:
@@ -231,321 +181,80 @@ class RuleConverter:
                 }
             )
             return ""
-    
+
     @staticmethod
-    def _parse_domain_rules(url: str, path: str = "") -> List[str]:
+    def parse_ruleset_from_file(file_path: str, behavior: str) -> List[str]:
         """
-        从URL或本地文件路径解析域名规则。
-        仅处理DOMAIN-SUFFIX类型的规则（以*.或+.开头的域名模式）。
-        
+        从给定的本地文件路径解析规则集。
+
         Args:
-            url (str): 下载域名规则的URL。
-            path (str): 域名规则的本地文件路径。
+            file_path: 规则集的本地文件路径。
+            behavior: 规则的行为 (domain, ipcidr, classical)，决定了解析方式。
             
         Returns:
-            list: 域名规则列表。
+            Mosdns格式的规则列表。
         """
+        if not os.path.exists(file_path):
+            logging.getLogger(__name__).warning(f"规则文件不存在，无法解析: {file_path}")
+            return []
+
+        parser = RuleConverter._get_parser_for_behavior(behavior)
+        if not parser:
+            logging.getLogger(__name__).warning(f"不支持的行为类型: {behavior}")
+            return []
+
         try:
-            # 如果提供了路径，则从本地文件读取
-            if path:
-                if os.path.exists(path):
-                    rules = []
-                    with open(path, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith('#'):
-                                # 转换为Mosdns格式
-                                if line.startswith("*."):
-                                    # *.example.com -> domain:example.com
-                                    line = line[2:]
-                                    rules.append(f"domain:{line}")
-                                elif line.startswith("+.") or line.startswith(".+"):
-                                    # +.example.com -> domain:example.com
-                                    line = line[2:]
-                                    rules.append(f"domain:{line}")
-                                elif line.startswith("."):
-                                    # .example.com -> domain:example.com
-                                    line = line[1:]
-                                    rules.append(f"domain:{line}")
-                                elif line == "*":
-                                    # * -> keyword:
-                                    rules.append("keyword:")
-                                else:
-                                    # 正常域名，但需要判断是否包含通配符
-                                    if "*" in line:
-                                        # 如果包含*通配符，按DOMAIN-WILDCARD处理
-                                        if line.startswith("*."):
-                                            # *.example.com -> domain:example.com
-                                            domain_part = line[2:]
-                                            rules.append(f"domain:{domain_part}")
-                                        elif line.startswith("*"):
-                                            # * -> keyword:
-                                            rules.append("keyword:")
-                                        else:
-                                            # 其他通配符情况，暂时转为keyword
-                                            rules.append(f"keyword:{line}")
-                                    else:
-                                        # 正常域名
-                                        rules.append(f"domain:{line}")
-                    return rules
-            
-            # 如果提供了URL，则下载并解析
-            if url:
-                try:
-                    response = httpx.get(url, timeout=30)
-                    response.raise_for_status()
-                    
-                    rules = []
-                    for line in response.text.splitlines():
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            # 转换为Mosdns格式
-                            if line.startswith("*."):
-                                # *.example.com -> domain:example.com
-                                line = line[2:]
-                                rules.append(f"domain:{line}")
-                            elif line.startswith("+.") or line.startswith(".+"):
-                                # +.example.com -> domain:example.com
-                                line = line[2:]
-                                rules.append(f"domain:{line}")
-                            elif line.startswith("."):
-                                # .example.com -> domain:example.com
-                                line = line[1:]
-                                rules.append(f"domain:{line}")
-                            elif line == "*":
-                                # * -> keyword:
-                                rules.append("keyword:")
-                            else:
-                                # 正常域名，但需要判断是否包含通配符
-                                # 优先处理通配符模式
-                                if line.startswith("*."):
-                                    # *.example.com -> domain:example.com
-                                    domain_part = line[2:]
-                                    rules.append(f"domain:{domain_part}")
-                                elif line.startswith("*"):
-                                    # * -> keyword:
-                                    rules.append("keyword:")
-                                else:
-                                    # 正常域名
-                                    rules.append(f"domain:{line}")
-                    return rules
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        "下载域名规则失败",
-                        extra={
-                            "url": url,
-                            "error": str(e)
-                        }
-                    )
-            
-            # 回退到空列表
-            return []
+            rules = []
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith('#'):
+                        parsed_rule = parser(line)
+                        if parsed_rule:
+                            rules.append(parsed_rule)
+            return rules
         except Exception as e:
-            logging.getLogger(__name__).error(
-                "解析域名规则失败",
-                extra={
-                    "url": url,
-                    "path": path,
-                    "error": str(e)
-                }
-            )
+            logging.getLogger(__name__).error(f"解析文件失败: {file_path}, 错误: {e}")
             return []
+
+    # --- 私有解析辅助方法 ---
     
     @staticmethod
-    def _parse_ipcidr_rules(url: str, path: str = "") -> List[str]:
-        """
-        从URL或本地文件路径解析IPCIDR规则。
-        仅处理IP-CIDR和IP-SUFFIX规则。
-        
-        Args:
-            url (str): 下载IPCIDR规则的URL。
-            path (str): IPCIDR规则的本地文件路径。
-            
-        Returns:
-            list: IPCIDR规则列表。
-        """
-        try:
-            # 如果提供了路径，则从本地文件读取
-            if path:
-                if os.path.exists(path):
-                    rules = []
-                    with open(path, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith('#'):
-                                # 检查规则格式，确保是IP-CIDR或IP-SUFFIX格式
-                                if '/' in line:  # CIDR格式，如 192.168.0.0/16 或 8.8.8.8/24
-                                    rules.append(line)
-                                else:
-                                    # 不是有效的IP格式，跳过
-                                    pass
-                    return rules
-            
-            # 如果提供了URL，则下载并解析
-            if url:
-                try:
-                    response = httpx.get(url, timeout=30)
-                    response.raise_for_status()
-                    
-                    rules = []
-                    for line in response.text.splitlines():
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            # 检查规则格式，确保是IP-CIDR或IP-SUFFIX格式
-                            if '/' in line:  # CIDR格式，如 192.168.0.0/16 或 8.8.8.8/24
-                                rules.append(line)
-                            else:
-                                # 不是有效的IP格式，跳过
-                                pass
-                    return rules
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        "下载IPCIDR规则失败",
-                        extra={
-                            "url": url,
-                            "error": str(e)
-                        }
-                    )
-            
-            # 回退到空列表
-            return []
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "解析IPCIDR规则失败",
-                extra={
-                    "url": url,
-                    "path": path,
-                    "error": str(e)
-                }
-            )
-            return []
-    
+    def _get_parser_for_behavior(behavior: str) -> Callable[[str], str] | None:
+        """根据行为返回对应的行解析器。"""
+        behavior_map = {
+            "domain": RuleConverter._parse_domain_line,
+            "ipcidr": RuleConverter._parse_ipcidr_line,
+            "classical": RuleConverter._parse_classical_line,
+        }
+        return behavior_map.get(behavior.lower())
+
     @staticmethod
-    def _parse_classical_rules(url: str, path: str = "") -> List[str]:
-        """
-        从URL或本地文件路径解析经典规则。
+    def _parse_domain_line(line: str) -> str:
+        if line.startswith(("+.", "*.")):
+            return f"domain:{line[2:]}"
+        if line.startswith("."):
+            return f"domain:{line[1:]}"
+        return f"domain:{line}"
+
+    @staticmethod
+    def _parse_ipcidr_line(line: str) -> str | None:
+        return line if '/' in line else None
+
+    @staticmethod
+    def _parse_classical_line(line: str) -> str | None:
+        parts = line.split(',', 1)
+        if len(parts) != 2: return None
+        rule_type, content = parts
         
-        Args:
-            url (str): 下载经典规则的URL。
-            path (str): 经典规则的本地文件路径。
-            
-        Returns:
-            list: 经典规则列表。
-        """
-        try:
-            # 如果提供了路径，则从本地文件读取
-            if path:
-                if os.path.exists(path):
-                    rules = []
-                    with open(path, 'r', encoding='utf-8') as f:
-                        for line in f:
-                            line = line.strip()
-                            if line and not line.startswith('#'):
-                                # 检查并解析支持的经典规则格式 (DOMAIN-SUFFIX,example.com)
-                                if line.startswith("DOMAIN-SUFFIX,"):
-                                    domain = line.split(",", 1)[1]
-                                    rules.append(f"domain:{domain}")
-                                elif line.startswith("DOMAIN,"):
-                                    domain = line.split(",", 1)[1]
-                                    rules.append(f"full:{domain}")
-                                elif line.startswith("DOMAIN-KEYWORD,"):
-                                    keyword = line.split(",", 1)[1]
-                                    rules.append(f"keyword:{keyword}")
-                                elif line.startswith("DOMAIN-WILDCARD,"):
-                                    wildcard_content = line.split(",", 1)[1]
-                                    # 处理通配符模式，例如 *.google.com -> domain:google.com
-                                    if wildcard_content.startswith("*."):
-                                        domain_part = wildcard_content[2:]
-                                        rules.append(f"domain:{domain_part}")
-                                    elif wildcard_content.startswith("*"):
-                                        rules.append("keyword:")
-                                    else:
-                                        # 其他情况，暂时转为keyword
-                                        rules.append(f"keyword:{wildcard_content}")
-                                elif line.startswith("DOMAIN-REGEX,"):
-                                    regex = line.split(",", 1)[1]
-                                    rules.append(f"regexp:{regex}")
-                                elif line.startswith("IP-CIDR,"):
-                                    cidr = line.split(",")[1]
-                                    # 直接添加CIDR，不带前缀
-                                    rules.append(cidr)
-                                elif line.startswith("IP-CIDR6,"):
-                                    cidr6 = line.split(",", 1)[1]
-                                    # 直接添加CIDR，不带前缀
-                                    rules.append(cidr6)
-                                elif line.startswith("IP-SUFFIX,"):
-                                    ip_suffix = line.split(",", 1)[1]
-                                    # 直接添加IP-SUFFIX，不带前缀
-                                    rules.append(ip_suffix)
-                                # 其他规则类型（如GEOSITE, GEOIP等）将被跳过
-                    return rules
-            
-            # 如果提供了URL，则下载并解析
-            if url:
-                try:
-                    response = httpx.get(url, timeout=30)
-                    response.raise_for_status()
-                    
-                    rules = []
-                    for line in response.text.splitlines():
-                        line = line.strip()
-                        if line and not line.startswith('#'):
-                            # 检查并解析支持的经典规则格式 (DOMAIN-SUFFIX,example.com)
-                            if line.startswith("DOMAIN-SUFFIX,"):
-                                domain = line.split(",", 1)[1]
-                                rules.append(f"domain:{domain}")
-                            elif line.startswith("DOMAIN,"):
-                                domain = line.split(",", 1)[1]
-                                rules.append(f"full:{domain}")
-                            elif line.startswith("DOMAIN-KEYWORD,"):
-                                keyword = line.split(",", 1)[1]
-                                rules.append(f"keyword:{keyword}")
-                            elif line.startswith("DOMAIN-WILDCARD,"):
-                                wildcard_content = line.split(",", 1)[1]
-                                # 处理通配符模式，例如 *.google.com -> domain:google.com
-                                if wildcard_content.startswith("*."):
-                                    domain_part = wildcard_content[2:]
-                                    rules.append(f"domain:{domain_part}")
-                                elif wildcard_content.startswith("*"):
-                                    rules.append("keyword:")
-                                else:
-                                    # 其他情况，暂时转为keyword
-                                    rules.append(f"keyword:{wildcard_content}")
-                            elif line.startswith("DOMAIN-REGEX,"):
-                                regex = line.split(",", 1)[1]
-                                rules.append(f"regexp:{regex}")
-                            elif line.startswith("IP-CIDR,"):
-                                cidr = line.split(",", 1)[1]
-                                # 直接添加CIDR，不带前缀
-                                rules.append(cidr)
-                            elif line.startswith("IP-CIDR6,"):
-                                cidr6 = line.split(",", 1)[1]
-                                # 直接添加CIDR，不带前缀
-                                rules.append(cidr6)
-                            elif line.startswith("IP-SUFFIX,"):
-                                ip_suffix = line.split(",", 1)[1]
-                                # 直接添加IP-SUFFIX，不带前缀
-                                rules.append(ip_suffix)
-                            # 其他规则类型（如GEOSITE, GEOIP等）将被跳过
-                    return rules
-                except Exception as e:
-                    logging.getLogger(__name__).error(
-                        "下载经典规则失败",
-                        extra={
-                            "url": url,
-                            "error": str(e)
-                        }
-                    )
-            
-            # 回退到空列表
-            return []
-        except Exception as e:
-            logging.getLogger(__name__).error(
-                "解析经典规则失败",
-                extra={
-                    "url": url,
-                    "path": path,
-                    "error": str(e)
-                }
-            )
-            return []
+        if rule_type == "DOMAIN-SUFFIX": return f"domain:{content}"
+        if rule_type == "DOMAIN": return f"full:{content}"
+        if rule_type == "IP-CIDR": return content
+        # ...可以补充更多classical类型...
+        return None
+    
+    
+    
+    
+    
+    
