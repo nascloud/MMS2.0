@@ -1,1 +1,115 @@
-# MMS (Mihomo + MosDNS + Sync) Docker 镜像\nFROM debian:bookworm-slim\n\n# 设置环境变量\nENV DEBIAN_FRONTEND=noninteractive\nENV APP_DIR=/app\nENV MOSDNS_DIR=/etc/mosdns\nENV MIHOMO_DIR=/etc/mihomo\n\n# 安装必要的依赖\nRUN apt-get update && apt-get install -y \\\n    curl \\\n    unzip \\\n    gzip \\\n    python3 \\\n    python3-pip \\\n    python-is-python3 \\\n    procps \\\n    inotify-tools \\\n    && rm -rf /var/lib/apt/lists/*\n\n# 安装 Python 依赖\nRUN pip3 install --upgrade pip --break-system-packages && \\\n    pip3 install --no-cache-dir --break-system-packages httpx pyyaml requests watchdog python-json-logger\n\n# 创建应用目录和默认配置目录\nRUN mkdir -p $APP_DIR /etc/mosdns/rules /etc/mihomo /default-configs\n\n# 下载并安装最新版 mihomo (amd64)\nRUN set -e && \\\n    echo \"Getting latest mihomo release...\" && \\\n    LATEST_MIHOMO=$(curl -s \"https://api.github.com/repos/MetaCubeX/mihomo/releases/latest\" | grep '\"tag_name\":' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | head -1) && \\\n    echo \"Latest mihomo version: $LATEST_MIHOMO\" && \\\n    if [ -z \"$LATEST_MIHOMO\" ]; then echo \"Failed to get latest version\"; exit 1; fi && \\\n    echo \"Getting download URL for linux-amd64...\" && \\\n    DOWNLOAD_URL=$(curl -s \"https://api.github.com/repos/MetaCubeX/mihomo/releases/latest\" | grep '\"browser_download_url\":' | grep 'linux-amd64' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | head -1) && \\\n    echo \"Downloading from: $DOWNLOAD_URL\" && \\\n    if [ -z \"$DOWNLOAD_URL\" ]; then echo \"Failed to get download URL\"; exit 1; fi && \\\n    FILENAME=$(basename \"$DOWNLOAD_URL\") && \\\n    echo \"Downloaded filename: $FILENAME\" && \\\n    curl -L --fail --retry 3 --retry-delay 5 -o \"$FILENAME\" \"$DOWNLOAD_URL\" && \\\n    if echo \"$FILENAME\" | grep -q '\\.gz$'; then \\\n        gunzip \"$FILENAME\" && \\\n        EXTRACTED_FILE=$(echo \"$FILENAME\" | sed 's/\\.gz$//'); \\\n    elif echo \"$FILENAME\" | grep -q '\\.zip$'; then \\\n        unzip \"$FILENAME\" && \\\n        EXTRACTED_FILE=\"mihomo-linux-amd64\"; \\\n    else \\\n        EXTRACTED_FILE=\"$FILENAME\"; \\\n    fi && \\\n    echo \"Extracted file: $EXTRACTED_FILE\" && \\\n    chmod +x \"$EXTRACTED_FILE\" && \\\n    mv \"$EXTRACTED_FILE\" /usr/local/bin/mihomo && \\\n    rm -f \"$FILENAME\" && \\\n    echo \"mihomo installed successfully\"\n\n# 下载并安装最新版 mosdns (amd64)\nRUN set -e && \\\n    echo \"Getting latest mosdns release...\" && \\\n    LATEST_MOSDNS=$(curl -s \"https://api.github.com/repos/IrineSistiana/mosdns/releases/latest\" | grep '\"tag_name\":' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | head -1) && \\\n    echo \"Latest mosdns version: $LATEST_MOSDNS\" && \\\n    if [ -z \"$LATEST_MOSDNS\" ]; then echo \"Failed to get latest version\"; exit 1; fi && \\\n    echo \"Getting download URL for linux-amd64...\" && \\\n    DOWNLOAD_URL=$(curl -s \"https://api.github.com/repos/IrineSistiana/mosdns/releases/latest\" | grep '\"browser_download_url\":' | grep 'linux-amd64' | sed -E 's/.*\"([^\"]+)\".*/\\1/' | head -1) && \\\n    echo \"Downloading from: $DOWNLOAD_URL\" && \\\n    if [ -z \"$DOWNLOAD_URL\" ]; then echo \"Failed to get download URL\"; exit 1; fi && \\\n    FILENAME=$(basename \"$DOWNLOAD_URL\") && \\\n    echo \"Downloaded filename: $FILENAME\" && \\\n    curl -L --fail --retry 3 --retry-delay 5 -o \"$FILENAME\" \"$DOWNLOAD_URL\" && \\\n    if echo \"$FILENAME\" | grep -q '\\.gz$'; then \\\n        gunzip \"$FILENAME\" && \\\n        EXTRACTED_FILE=$(echo \"$FILENAME\" | sed 's/\\.gz$//'); \\\n    elif echo \"$FILENAME\" | grep -q '\\.zip$'; then \\\n        unzip \"$FILENAME\" && \\\n        EXTRACTED_FILE=\"mosdns\"; \\\n    else \\\n        EXTRACTED_FILE=\"$FILENAME\"; \\\n    fi && \\\n    echo \"Extracted file: $EXTRACTED_FILE\" && \\\n    chmod +x \"$EXTRACTED_FILE\" && \\\n    mv \"$EXTRACTED_FILE\" /usr/local/bin/mosdns && \\\n    rm -f \"$FILENAME\" *.md *.yaml LICENSE 2>/dev/null || true && \\\n    echo \"mosdns installed successfully\"\n\n# 复制配置文件到默认配置目录\nCOPY ./docker/config.yaml $APP_DIR/config\nCOPY ./docker/mihomo.yaml /default-configs/\nCOPY ./docker/mosdns.yaml /default-configs/\n\n# 复制源代码文件\nCOPY ./mihomo_sync/ $APP_DIR/mihomo_sync/\nCOPY ./main.py $APP_DIR/\n\n# 复制脚本文件\nCOPY ./docker/docker-entrypoint.sh $APP_DIR/\n\n# 设置文件权限\nRUN chmod +x $APP_DIR/docker-entrypoint.sh\n\n# 暴露端口\n# 53: MosDNS DNS服务\n# 1053: Mihomo DNS服务（备用）\n# 7890: Mihomo 混合端口\n# 7891: Mihomo SOCKS代理\n# 7892: Mihomo HTTP代理  \n# 9090: Mihomo 控制面板\nEXPOSE 53/tcp 53/udp\nEXPOSE 1053/tcp 1053/udp\nEXPOSE 7890 7891 7892 9090\n\n# 设置工作目录\nWORKDIR $APP_DIR\n\n# 设置启动命令\nCMD [\"/bin/bash\", \"/app/docker-entrypoint.sh\"]\n
+# MMS (Mihomo + MosDNS + Sync) Docker 镜像
+FROM debian:bookworm-slim
+
+# 设置环境变量
+ENV DEBIAN_FRONTEND=noninteractive
+ENV APP_DIR=/app
+ENV MOSDNS_DIR=/etc/mosdns
+ENV MIHOMO_DIR=/etc/mihomo
+
+# 安装必要的依赖
+RUN apt-get update && apt-get install -y \
+    curl \
+    unzip \
+    gzip \
+    python3 \
+    python3-pip \
+    python-is-python3 \
+    procps \
+    inotify-tools \
+    && rm -rf /var/lib/apt/lists/*
+
+# 安装 Python 依赖
+RUN pip3 install --upgrade pip --break-system-packages && \
+    pip3 install --no-cache-dir --break-system-packages httpx pyyaml requests watchdog python-json-logger
+
+# 创建应用目录和默认配置目录
+RUN mkdir -p $APP_DIR /etc/mosdns/rules /etc/mihomo /default-configs
+
+# 下载并安装最新版 mihomo (amd64)
+RUN set -e && \
+    echo "Getting latest mihomo release..." && \
+    LATEST_MIHOMO=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    echo "Latest mihomo version: $LATEST_MIHOMO" && \
+    if [ -z "$LATEST_MIHOMO" ]; then echo "Failed to get latest version"; exit 1; fi && \
+    echo "Getting download URL for linux-amd64..." && \
+    DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest" | grep '"browser_download_url":' | grep 'linux-amd64' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    echo "Downloading from: $DOWNLOAD_URL" && \
+    if [ -z "$DOWNLOAD_URL" ]; then echo "Failed to get download URL"; exit 1; fi && \
+    FILENAME=$(basename "$DOWNLOAD_URL") && \
+    echo "Downloaded filename: $FILENAME" && \
+    curl -L --fail --retry 3 --retry-delay 5 -o "$FILENAME" "$DOWNLOAD_URL" && \
+    if echo "$FILENAME" | grep -q '\.gz$'; then \
+        gunzip "$FILENAME" && \
+        EXTRACTED_FILE=$(echo "$FILENAME" | sed 's/\.gz$//'); \
+    elif echo "$FILENAME" | grep -q '\.zip$'; then \
+        unzip "$FILENAME" && \
+        EXTRACTED_FILE="mihomo-linux-amd64"; \
+    else \
+        EXTRACTED_FILE="$FILENAME"; \
+    fi && \
+    echo "Extracted file: $EXTRACTED_FILE" && \
+    chmod +x "$EXTRACTED_FILE" && \
+    mv "$EXTRACTED_FILE" /usr/local/bin/mihomo && \
+    rm -f "$FILENAME" && \
+    echo "mihomo installed successfully"
+
+# 下载并安装最新版 mosdns (amd64)
+RUN set -e && \
+    echo "Getting latest mosdns release..." && \
+    LATEST_MOSDNS=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    echo "Latest mosdns version: $LATEST_MOSDNS" && \
+    if [ -z "$LATEST_MOSDNS" ]; then echo "Failed to get latest version"; exit 1; fi && \
+    echo "Getting download URL for linux-amd64..." && \
+    DOWNLOAD_URL=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest" | grep '"browser_download_url":' | grep 'linux-amd64' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
+    echo "Downloading from: $DOWNLOAD_URL" && \
+    if [ -z "$DOWNLOAD_URL" ]; then echo "Failed to get download URL"; exit 1; fi && \
+    FILENAME=$(basename "$DOWNLOAD_URL") && \
+    echo "Downloaded filename: $FILENAME" && \
+    curl -L --fail --retry 3 --retry-delay 5 -o "$FILENAME" "$DOWNLOAD_URL" && \
+    if echo "$FILENAME" | grep -q '\.gz$'; then \
+        gunzip "$FILENAME" && \
+        EXTRACTED_FILE=$(echo "$FILENAME" | sed 's/\.gz$//'); \
+    elif echo "$FILENAME" | grep -q '\.zip$'; then \
+        unzip "$FILENAME" && \
+        EXTRACTED_FILE="mosdns"; \
+    else \
+        EXTRACTED_FILE="$FILENAME"; \
+    fi && \
+    echo "Extracted file: $EXTRACTED_FILE" && \
+    chmod +x "$EXTRACTED_FILE" && \
+    mv "$EXTRACTED_FILE" /usr/local/bin/mosdns && \
+    rm -f "$FILENAME" *.md *.yaml LICENSE 2>/dev/null || true && \
+    echo "mosdns installed successfully"
+
+# 复制配置文件到默认配置目录
+COPY ./docker/config.yaml $APP_DIR/config
+COPY ./docker/mihomo.yaml /default-configs/
+COPY ./docker/mosdns.yaml /default-configs/
+
+# 复制源代码文件
+COPY ./mihomo_sync/ $APP_DIR/mihomo_sync/
+COPY ./main.py $APP_DIR/
+
+# 复制脚本文件
+COPY ./docker/docker-entrypoint.sh $APP_DIR/
+
+# 设置文件权限
+RUN chmod +x $APP_DIR/docker-entrypoint.sh
+
+# 暴露端口
+# 53: MosDNS DNS服务
+# 1053: Mihomo DNS服务（备用）
+# 7890: Mihomo 混合端口
+# 7891: Mihomo SOCKS代理
+# 7892: Mihomo HTTP代理  
+# 9090: Mihomo 控制面板
+EXPOSE 53/tcp 53/udp
+EXPOSE 1053/tcp 1053/udp
+EXPOSE 7890 7891 7892 9090
+
+# 设置工作目录
+WORKDIR $APP_DIR
+
+# 设置启动命令
+CMD ["/bin/bash", "/app/docker-entrypoint.sh"]
