@@ -1,4 +1,6 @@
 #!/bin/bash
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 
 # 检查并复制 mosdns 配置文件
 if [ ! -f /etc/mosdns/config.yaml ]; then
