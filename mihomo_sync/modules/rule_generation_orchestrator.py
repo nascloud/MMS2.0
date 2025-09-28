@@ -191,41 +191,38 @@ class RuleGenerationOrchestrator:
         for policy, rule_types in aggregated_rules.items():
             policy_dir = os.path.join(self.intermediate_dir, policy.lower())
             os.makedirs(policy_dir, exist_ok=True)
-            
-            # 写入域名规则
+
+            # 写入域名规则（按 provider 分文件）
             if "domain" in rule_types:
-                domain_file_path = os.path.join(policy_dir, "domain.txt")
-                with open(domain_file_path, "w", encoding="utf-8") as f:
-                    # 收集所有域名规则
-                    all_domain_rules = set()
-                    for provider_rules in rule_types["domain"].values():
-                        all_domain_rules.update(provider_rules)
-                    
-                    # 写入规则，每行一个
-                    for rule in sorted(all_domain_rules):
-                        f.write(rule + "\n")
-                
-                self.logger.debug(
-                    f"已写入域名规则文件: {domain_file_path}",
-                    extra={
-                        "策略": policy,
-                        "规则数量": len(all_domain_rules)
-                    }
-                )
-            
-            # 写入IP CIDR规则
+                domain_dir = os.path.join(policy_dir, "domain")
+                os.makedirs(domain_dir, exist_ok=True)
+                for provider_name, provider_rules in rule_types["domain"].items():
+                    if provider_name == "single_rules" or provider_name == "_inline":
+                        # 内联规则统一写到 _inline_rules.list
+                        file_path = os.path.join(domain_dir, "_inline_rules.list")
+                    else:
+                        file_path = os.path.join(domain_dir, f"provider_{provider_name}.list")
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        for rule in sorted(provider_rules):
+                            f.write(rule + "\n")
+                    self.logger.debug(
+                        f"已写入域名规则文件: {file_path}",
+                        extra={
+                            "策略": policy,
+                            "provider": provider_name,
+                            "规则数量": len(provider_rules)
+                        }
+                    )
+
+            # 写入IP CIDR规则（保持原有逻辑）
             if "ipcidr" in rule_types:
                 ipcidr_file_path = os.path.join(policy_dir, "ipcidr.txt")
                 with open(ipcidr_file_path, "w", encoding="utf-8") as f:
-                    # 收集所有IP CIDR规则
                     all_ipcidr_rules = set()
                     for provider_rules in rule_types["ipcidr"].values():
                         all_ipcidr_rules.update(provider_rules)
-                    
-                    # 写入规则，每行一个
                     for rule in sorted(all_ipcidr_rules):
                         f.write(rule + "\n")
-                
                 self.logger.debug(
                     f"已写入IP CIDR规则文件: {ipcidr_file_path}",
                     extra={
@@ -233,7 +230,49 @@ class RuleGenerationOrchestrator:
                         "规则数量": len(all_ipcidr_rules)
                     }
                 )
-        
+
+            # 写入IPv4规则（来自RULE-SET和单规则）
+            if "ipv4" in rule_types:
+                ipv4_dir = os.path.join(policy_dir, "ipv4")
+                os.makedirs(ipv4_dir, exist_ok=True)
+                for provider_name, provider_rules in rule_types["ipv4"].items():
+                    if provider_name == "single_rules" or provider_name == "_inline":
+                        file_path = os.path.join(ipv4_dir, "_inline_rules.list")
+                    else:
+                        file_path = os.path.join(ipv4_dir, f"provider_{provider_name}.list")
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        for rule in sorted(provider_rules):
+                            f.write(rule + "\n")
+                    self.logger.debug(
+                        f"已写入IPv4规则文件: {file_path}",
+                        extra={
+                            "策略": policy,
+                            "provider": provider_name,
+                            "规则数量": len(provider_rules)
+                        }
+                    )
+
+            # 写入IPv6规则（来自RULE-SET和单规则）
+            if "ipv6" in rule_types:
+                ipv6_dir = os.path.join(policy_dir, "ipv6")
+                os.makedirs(ipv6_dir, exist_ok=True)
+                for provider_name, provider_rules in rule_types["ipv6"].items():
+                    if provider_name == "single_rules" or provider_name == "_inline":
+                        file_path = os.path.join(ipv6_dir, "_inline_rules.list")
+                    else:
+                        file_path = os.path.join(ipv6_dir, f"provider_{provider_name}.list")
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        for rule in sorted(provider_rules):
+                            f.write(rule + "\n")
+                    self.logger.debug(
+                        f"已写入IPv6规则文件: {file_path}",
+                        extra={
+                            "策略": policy,
+                            "provider": provider_name,
+                            "规则数量": len(provider_rules)
+                        }
+                    )
+
         duration = time.time() - start_time
         self.logger.debug(
             "中间文件写入完成",
@@ -392,10 +431,12 @@ class RuleGenerationOrchestrator:
                 else:
                     domain_rules.add(rule_item)
             
+            # 如果有任何域名规则，则添加到domain聚合器
+            if domain_rules:
+                aggregated_rules.setdefault(resolved_policy, {}).setdefault("domain", {}).setdefault(provider_name, set()).update(domain_rules)
             # 如果有任何IPv4规则，则添加到IPv4聚合器
             if ipv4_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv4", {}).setdefault(provider_name, set()).update(ipv4_rules)
-                
             # 如果有任何IPv6规则，则添加到IPv6聚合器
             if ipv6_rules:
                 aggregated_rules.setdefault(resolved_policy, {}).setdefault("ipv6", {}).setdefault(provider_name, set()).update(ipv6_rules)
@@ -479,8 +520,8 @@ class RuleGenerationOrchestrator:
             self.logger.debug(
                 f"已处理单个规则: 类型={rule.get('type', '')}, 策略={resolved_policy}",
                 extra={
-                    "rule_type": rule.get("type", ""),
-                    "payload": rule.get("payload", ""),
+                    "rule_type": rule.get('type', ''),
+                    "payload": rule.get('payload', ''),
                     "resolved_policy": resolved_policy
                 }
             )

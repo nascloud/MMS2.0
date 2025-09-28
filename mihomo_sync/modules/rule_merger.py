@@ -70,32 +70,60 @@ class RuleMerger:
     def _process_intermediate_directory(self, intermediate_path: str, final_output_path: str) -> None:
         """
         处理中间目录并合并规则。
-        
-        Args:
-            intermediate_path (str): 中间文件目录路径
-            final_output_path (str): 最终输出目录路径
         """
-        # 遍历中间目录结构
-        for root, dirs, files in os.walk(intermediate_path):
-            # 如果此目录中没有文件则跳过
-            if not files:
+        for policy in ["direct", "proxy", "reject"]:
+            policy_dir = os.path.join(intermediate_path, policy)
+            if not os.path.isdir(policy_dir):
                 continue
-            
-            # 从目录结构确定策略
-            rel_path = os.path.relpath(root, intermediate_path)
-            path_parts = rel_path.split(os.sep)
-            
-            # 检查是否是策略目录（如 direct, proxy, reject）
-            if len(path_parts) == 1:
-                policy = path_parts[0]
-                # 处理此策略目录下的所有文件
-                for file in files:
-                    if file.endswith('.txt'):
-                        # 提取内容类型（如 domain, ipv4, ipv6）
-                        content_type = file[:-4]  # 去掉 .txt 扩展名
-                        file_path = os.path.join(root, file)
-                        # 合并此文件中的规则
-                        self._merge_file_rules(file_path, policy, content_type, final_output_path)
+            # 合并 domain 规则
+            domain_dir = os.path.join(policy_dir, "domain")
+            domain_rules = set()
+            if os.path.isdir(domain_dir):
+                for fname in os.listdir(domain_dir):
+                    if fname.endswith(".list"):
+                        fpath = os.path.join(domain_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    rule = line.strip()
+                                    if rule:
+                                        domain_rules.add(rule)
+                        except Exception as e:
+                            self.logger.warning(
+                                "读取域名规则文件失败",
+                                extra={"rule_file": fpath, "error": str(e)}
+                            )
+            if domain_rules:
+                output_filename = f"{policy}_domain.txt"
+                output_filepath = os.path.join(final_output_path, output_filename)
+                with open(output_filepath, "w", encoding="utf-8") as f:
+                    f.write("\n".join(sorted(domain_rules)))
+                self.logger.debug(
+                    "合并域名规则文件",
+                    extra={
+                        "policy": policy,
+                        "rules_count": len(domain_rules),
+                        "output_file": output_filepath
+                    }
+                )
+            # 合并 ipv4/ipv6/ipcidr 文件
+            for fname in [f"{policy}_ipv4.txt", f"{policy}_ipv6.txt", f"{policy}_ipcidr.txt"]:
+                src_path = os.path.join(policy_dir, fname)
+                if os.path.isfile(src_path):
+                    with open(src_path, "r", encoding="utf-8") as f:
+                        rules = [line.strip() for line in f if line.strip()]
+                    if rules:
+                        dst_path = os.path.join(final_output_path, fname)
+                        with open(dst_path, "w", encoding="utf-8") as fout:
+                            fout.write("\n".join(sorted(rules)))
+                        self.logger.debug(
+                            "合并IP规则文件",
+                            extra={
+                                "policy": policy,
+                                "output_file": dst_path,
+                                "rules_count": len(rules)
+                            }
+                        )
     
     def _merge_file_rules(self, file_path: str, policy: str, content_type: str, final_output_path: str) -> None:
         """
