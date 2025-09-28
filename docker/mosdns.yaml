@@ -106,13 +106,13 @@ plugins:
     type: "domain_set"
     args:
       files:
-        - /etc/mosdns/rules/mihomo_direct_domain.txt
+        - /etc/mosdns/rules/direct_domain.txt
 
   - tag: "proxy_match"
     type: "domain_set"
     args:
       files:
-        - /etc/mosdns/rules/mihomo_proxy_domain.txt
+        - /etc/mosdns/rules/proxy_domain.txt
 
   - tag: "custom_direct"
     type: "domain_set"
@@ -136,7 +136,7 @@ plugins:
     type: "domain_set"
     args:
       files:
-        - /etc/mosdns/rules/mihomo_reject_domain.txt
+        - /etc/mosdns/rules/reject_domain.txt
 
   # - tag: "ddns_match"
   #   type: "domain_set"

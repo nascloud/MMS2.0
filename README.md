@@ -127,40 +127,80 @@ rule-providers:
 
 ### Docker 运行
 
+如果需要使用 TUN 模式（推荐），请使用提供的 docker-compose.yml 文件：
+
+```bash
+# 构建并启动服务
+docker-compose up -d
+
+# 查看日志
+docker-compose logs -f
+
+# 停止服务
+docker-compose down
+```
+
+或者直接使用 docker run 命令（需要添加特定的 capabilities）：
+
 ```bash
 docker run -d \
   --name mihomo-mosdns-sync \
-  -v /path/to/config:/home/appuser/app/config \
+  --cap-add=NET_ADMIN \
+  --cap-add=SYS_ADMIN \
+  -v /dev/net/tun:/dev/net/tun \
+  -v /path/to/config:/app/config \
   -v /etc/mosdns/rules:/etc/mosdns/rules \
-  -v /path/to/mihomo/config.yaml:/home/appuser/app/mihomo_config.yaml \
+  -v /path/to/mihomo/config.yaml:/etc/mihomo/config.yaml \
   --restart unless-stopped \
   mihomo-mosdns-sync:latest
 ```
 
 ### Docker Compose
 
+使用项目根目录下的 `docker-compose.yml` 文件来部署完整的服务栈：
+
 ```yaml
 version: '3.8'
 
 services:
-  mihomo:
-    image: ghcr.io/mihomo-party-org/mihomo-party
-    # ... mihomo 配置
-
-  mosdns:
-    image: irinesistiana/mosdns-cn:latest
-    # ... mosdns 配置
-
-  mihomo-mosdns-sync:
-    build: .
-    depends_on:
-      - mihomo
-      - mosdns
+  mms:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: mms
+    ports:
+      # MosDNS DNS服务
+      - "53:53/tcp"
+      - "53:53/udp"
+      # Mihomo 服务
+      - "1053:1053/tcp"
+      - "1053:1053/udp"
+      - "7890:7890"  # Mihomo 混合端口
+      - "7891:7891"  # Mihomo SOCKS代理
+      - "7892:7892"  # Mihomo HTTP代理
+      - "9090:9090"  # Mihomo 控制面板
     volumes:
-      - ./config:/home/appuser/app/config
-      - /etc/mosdns/rules:/etc/mosdns/rules
-      - ./mihomo_config.yaml:/home/appuser/app/mihomo_config.yaml
+      # 配置文件卷
+      - ./config/mihomo.yaml:/etc/mihomo/config.yaml
+      - ./config/mosdns.yaml:/etc/mosdns/config.yaml
+      # 规则文件卷
+      - ./config/rules:/etc/mosdns/rules
+      # 日志卷
+      - ./logs:/app/logs
+      # 确保可以访问宿主机的 TUN 设备
+      - /dev/net/tun:/dev/net/tun
+    # 需要网络和系统权限
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
     restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    # 额外的 sysctl 设置
+    sysctls:
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
 ```
 
 ## 日志查看

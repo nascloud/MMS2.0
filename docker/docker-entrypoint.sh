@@ -52,4 +52,4 @@ sleep 2
 
 # Start MMS2.0 Python application
 echo "Starting MMS2.0 application..."
-python main.py
+python3 main.py

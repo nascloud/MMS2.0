@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  mms:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    container_name: mms
+    ports:
+      # MosDNS DNS服务
+      - "53:53/tcp"
+      - "53:53/udp"
+      # Mihomo 服务
+      - "1053:1053/tcp"
+      - "1053:1053/udp"
+      - "7890:7890"  # Mihomo 混合端口
+      - "7891:7891"  # Mihomo SOCKS代理
+      - "7892:7892"  # Mihomo HTTP代理
+      - "9090:9090"  # Mihomo 控制面板
+    volumes:
+      # 配置文件卷
+      - ./config/mihomo.yaml:/etc/mihomo/config.yaml
+      - ./config/mosdns.yaml:/etc/mosdns/config.yaml
+      # 规则文件卷
+      - ./config/rules:/etc/mosdns/rules
+      # 日志卷
+      - ./logs:/app/logs
+      # 确保可以访问宿主机的 TUN 设备
+      - /dev/net/tun:/dev/net/tun
+    # 需要网络和系统权限
+    cap_add:
+      - NET_ADMIN
+      - SYS_ADMIN
+    # 特权模式（可选，根据需要启用）
+    # privileged: true
+    # 网络模式（可选，桥接模式通常足够）
+    network_mode: bridge
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Shanghai
+    # 额外的 sysctl 设置
+    sysctls:
+      - net.ipv4.conf.all.rp_filter=0
+      - net.ipv4.ip_forward=1
+      - net.ipv6.conf.all.forwarding=1
