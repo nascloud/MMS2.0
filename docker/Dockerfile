@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     inotify-tools \
     build-essential \
     python3-dev \
+    patchelf \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖和 Nuitka
