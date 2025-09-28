@@ -1,30 +1,44 @@
-# MMS (Mihomo + MosDNS + Sync) Docker 镜像
-FROM debian:bookworm-slim
+# 第一阶段：构建和打包 Python 项目
+FROM python:3.11-slim AS builder
 
-# 设置环境变量
-ENV DEBIAN_FRONTEND=noninteractive
 ENV APP_DIR=/app
-ENV MOSDNS_DIR=/etc/mosdns
-ENV MIHOMO_DIR=/etc/mihomo
+WORKDIR $APP_DIR
 
-# 安装必要的依赖
-RUN apt-get update && apt-get install -y \
+# 安装依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     gzip \
-    python3 \
-    python3-pip \
-    python-is-python3 \
     procps \
     inotify-tools \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
 # 安装 Python 依赖
-RUN pip3 install --upgrade pip --break-system-packages && \
-    pip3 install --no-cache-dir --break-system-packages httpx pyyaml requests watchdog python-json-logger
+RUN pip install --upgrade pip && \
+    pip install httpx pyyaml requests watchdog python-json-logger pyinstaller
 
-# 创建应用目录和默认配置目录
-RUN mkdir -p $APP_DIR /etc/mosdns/rules /etc/mihomo /default-configs
+# 复制源码
+COPY ./main.py $APP_DIR/
+COPY ./mihomo_sync/ $APP_DIR/mihomo_sync/
+
+# 打包为单一可执行文件
+RUN pyinstaller --onefile --name mms main.py
+
+# 第二阶段：精简运行环境
+FROM debian:bookworm-slim
+
+ENV APP_DIR=/app
+WORKDIR $APP_DIR
+
+# 安装必要运行依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    unzip \
+    gzip \
+    procps \
+    inotify-tools \
+    && rm -rf /var/lib/apt/lists/*
 
 # 下载并安装最新版 mihomo (amd64)
 RUN set -e && \
@@ -51,7 +65,7 @@ RUN set -e && \
     echo "Extracted file: $EXTRACTED_FILE" && \
     chmod +x "$EXTRACTED_FILE" && \
     mv "$EXTRACTED_FILE" /usr/local/bin/mihomo && \
-    rm -f "$FILENAME" && \
+    rm -rf "$FILENAME" *.md *.yaml LICENSE __MACOSX 2>/dev/null || true && \
     echo "mihomo installed successfully"
 
 # 下载并安装最新版 mosdns (amd64)
@@ -79,7 +93,7 @@ RUN set -e && \
     echo "Extracted file: $EXTRACTED_FILE" && \
     chmod +x "$EXTRACTED_FILE" && \
     mv "$EXTRACTED_FILE" /usr/local/bin/mosdns && \
-    rm -f "$FILENAME" *.md *.yaml LICENSE 2>/dev/null || true && \
+    rm -rf "$FILENAME" *.md *.yaml LICENSE __MACOSX 2>/dev/null || true && \
     echo "mosdns installed successfully"
 
 # 复制配置文件到默认配置目录
@@ -87,23 +101,15 @@ COPY ./docker/config.yaml $APP_DIR/config/
 COPY ./docker/mihomo.yaml /default-configs/
 COPY ./docker/mosdns.yaml /default-configs/
 
-# 复制源代码文件
-COPY ./mihomo_sync/ $APP_DIR/mihomo_sync/
-COPY ./main.py $APP_DIR/
-
 # 复制脚本文件
 COPY ./docker/docker-entrypoint.sh $APP_DIR/
-
-# 设置文件权限
 RUN chmod +x $APP_DIR/docker-entrypoint.sh
 
+# 只复制打包后的可执行文件
+COPY --from=builder /app/dist/mms $APP_DIR/mms
+RUN chmod +x $APP_DIR/mms
+
 # 暴露端口
-# 53: MosDNS DNS服务
-# 1053: Mihomo DNS服务（备用）
-# 7890: Mihomo 混合端口
-# 7891: Mihomo SOCKS代理
-# 7892: Mihomo HTTP代理  
-# 9090: Mihomo 控制面板
 EXPOSE 53/tcp 53/udp
 EXPOSE 1053/tcp 1053/udp
 EXPOSE 7890 7891 7892 9090
@@ -111,5 +117,5 @@ EXPOSE 7890 7891 7892 9090
 # 设置工作目录
 WORKDIR $APP_DIR
 
-# 设置启动命令
+# 设置启动命令（用打包后的可执行文件）
 CMD ["/bin/bash", "/app/docker-entrypoint.sh"]

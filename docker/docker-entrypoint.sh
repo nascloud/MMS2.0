@@ -52,6 +52,6 @@ mihomo -d /etc/mihomo &
 # Wait a moment for mihomo to start
 sleep 2
 
-# Start MMS2.0 Python application
+# Start packaged MMS2.0 executable
 echo "Starting MMS2.0 application..."
-python3 main.py
+/app/mms
