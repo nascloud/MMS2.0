@@ -138,13 +138,17 @@ class RuleDownloader:
             return
 
         # 3. 下载新内容并更新缓存
+        try:
+            text = response.content.decode("utf-8", errors="replace")
+        except Exception:
+            text = response.text  # 保底方案
         with open(content_path, 'w', encoding='utf-8') as f:
-            f.write(response.text)
+            f.write(text)
         
         new_etag = response.headers.get('ETag')
         if new_etag:
-            with open(meta_path, 'w') as f:
-                json.dump({'etag': new_etag}, f)
+            with open(meta_path, 'w', encoding='utf-8') as f:
+                json.dump({'etag': new_etag}, f, ensure_ascii=False)
         elif os.path.exists(meta_path):
             os.remove(meta_path)
         
