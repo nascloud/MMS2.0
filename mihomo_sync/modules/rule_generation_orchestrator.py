@@ -337,6 +337,18 @@ class RuleGenerationOrchestrator:
             }
         )
     
+    def _convert_mrs_url(self, url: str, format_: str, behavior: str) -> str:
+        """
+        若 provider 为 mrs 格式，根据行为自动转换 url 后缀。
+        domain/ipcidr -> .list，classical -> .yaml，其它不变。
+        """
+        if format_ and format_.lower() == "mrs" and url:
+            if behavior.lower() in ("domain", "ipcidr"):
+                return url.rsplit(".mrs", 1)[0] + ".list" if url.endswith(".mrs") else url
+            elif behavior.lower() == "classical":
+                return url.rsplit(".mrs", 1)[0] + ".yaml" if url.endswith(".mrs") else url
+        return url
+
     async def _process_rules_workflow(self, rules: list, providers_info: Dict[str, Any], 
                                       proxies_data: Dict[str, Any],
                                       aggregated_rules: Dict[str, Dict[str, Dict[str, Set[str]]]], 
@@ -354,8 +366,10 @@ class RuleGenerationOrchestrator:
                 provider_name = rule.get("payload")
                 if provider_name in providers_info:
                     provider_info = providers_info[provider_name]
-                    # 假定此处可以从provider_info中解析出最终的URL
-                    url = provider_info.get("url") # 你可能需要实现更复杂的URL解析逻辑
+                    url = provider_info.get("url")
+                    format_ = provider_info.get("format", "")
+                    behavior = provider_info.get("behavior", "domain")
+                    url = self._convert_mrs_url(url, format_, behavior)
                     if url:
                         urls_to_download.add(url)
         
@@ -449,6 +463,9 @@ class RuleGenerationOrchestrator:
             
             # 从下载器获取缓存路径
             url = provider_info.get("url")
+            format_ = provider_info.get("format", "")
+            behavior = provider_info.get("behavior", "domain")
+            url = self._convert_mrs_url(url, format_, behavior)
             if not url:
                 return
 
@@ -458,7 +475,7 @@ class RuleGenerationOrchestrator:
             # 将路径和行为交给转换器
             content_list = RuleConverter.parse_ruleset_from_file(
                 local_path, 
-                provider_info.get("behavior", "domain")
+                behavior
             )
             self.logger.debug(
                 f"规则集 {provider_name} 包含 {len(content_list)} 条规则"
