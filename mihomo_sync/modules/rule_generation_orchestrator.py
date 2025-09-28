@@ -117,7 +117,21 @@ class RuleGenerationOrchestrator:
             # 步骤5：设置环境：创建共享客户端和模块实例
             async with httpx.AsyncClient() as client:
                 cache_path = os.path.join(self.intermediate_dir, ".cache")
-                downloader = RuleDownloader(client=client, cache_dir=cache_path)
+                # 获取重试配置
+                retry_config = self.config.get_api_retry_config()
+                max_retries = retry_config.get('max_retries', 5)
+                initial_backoff = retry_config.get('initial_backoff', 1.0)
+                max_backoff = retry_config.get('max_backoff', 16.0)
+                jitter = retry_config.get('jitter', True)
+                
+                downloader = RuleDownloader(
+                    client=client, 
+                    cache_dir=cache_path,
+                    max_retries=max_retries,
+                    initial_backoff=initial_backoff,
+                    max_backoff=max_backoff,
+                    jitter=jitter
+                )
                 
                 # 步骤6：初始化内存聚合器
                 # 初始化固定策略的聚合器
