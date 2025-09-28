@@ -106,24 +106,85 @@ class RuleMerger:
                         "output_file": output_filepath
                     }
                 )
-            # 合并 ipv4/ipv6/ipcidr 文件
-            for fname in [f"{policy}_ipv4.txt", f"{policy}_ipv6.txt", f"{policy}_ipcidr.txt"]:
-                src_path = os.path.join(policy_dir, fname)
-                if os.path.isfile(src_path):
-                    with open(src_path, "r", encoding="utf-8") as f:
-                        rules = [line.strip() for line in f if line.strip()]
-                    if rules:
-                        dst_path = os.path.join(final_output_path, fname)
-                        with open(dst_path, "w", encoding="utf-8") as fout:
-                            fout.write("\n".join(sorted(rules)))
-                        self.logger.debug(
-                            "合并IP规则文件",
-                            extra={
-                                "policy": policy,
-                                "output_file": dst_path,
-                                "rules_count": len(rules)
-                            }
-                        )
+            # 合并 ipv4 规则
+            ipv4_dir = os.path.join(policy_dir, "ipv4")
+            ipv4_rules = set()
+            if os.path.isdir(ipv4_dir):
+                for fname in os.listdir(ipv4_dir):
+                    if fname.endswith(".list"):
+                        fpath = os.path.join(ipv4_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    rule = line.strip()
+                                    if rule:
+                                        ipv4_rules.add(rule)
+                        except Exception as e:
+                            self.logger.warning(
+                                "读取IPv4规则文件失败",
+                                extra={"rule_file": fpath, "error": str(e)}
+                            )
+            if ipv4_rules:
+                output_filename = f"{policy}_ipv4.txt"
+                output_filepath = os.path.join(final_output_path, output_filename)
+                with open(output_filepath, "w", encoding="utf-8") as f:
+                    f.write("\n".join(sorted(ipv4_rules)))
+                self.logger.debug(
+                    "合并IPv4规则文件",
+                    extra={
+                        "policy": policy,
+                        "rules_count": len(ipv4_rules),
+                        "output_file": output_filepath
+                    }
+                )
+            # 合并 ipv6 规则
+            ipv6_dir = os.path.join(policy_dir, "ipv6")
+            ipv6_rules = set()
+            if os.path.isdir(ipv6_dir):
+                for fname in os.listdir(ipv6_dir):
+                    if fname.endswith(".list"):
+                        fpath = os.path.join(ipv6_dir, fname)
+                        try:
+                            with open(fpath, "r", encoding="utf-8") as f:
+                                for line in f:
+                                    rule = line.strip()
+                                    if rule:
+                                        ipv6_rules.add(rule)
+                        except Exception as e:
+                            self.logger.warning(
+                                "读取IPv6规则文件失败",
+                                extra={"rule_file": fpath, "error": str(e)}
+                            )
+            if ipv6_rules:
+                output_filename = f"{policy}_ipv6.txt"
+                output_filepath = os.path.join(final_output_path, output_filename)
+                with open(output_filepath, "w", encoding="utf-8") as f:
+                    f.write("\n".join(sorted(ipv6_rules)))
+                self.logger.debug(
+                    "合并IPv6规则文件",
+                    extra={
+                        "policy": policy,
+                        "rules_count": len(ipv6_rules),
+                        "output_file": output_filepath
+                    }
+                )
+            # 合并 ipcidr 文件（保持原有逻辑）
+            ipcidr_path = os.path.join(policy_dir, f"{policy}_ipcidr.txt")
+            if os.path.isfile(ipcidr_path):
+                with open(ipcidr_path, "r", encoding="utf-8") as f:
+                    rules = [line.strip() for line in f if line.strip()]
+                if rules:
+                    dst_path = os.path.join(final_output_path, f"{policy}_ipcidr.txt")
+                    with open(dst_path, "w", encoding="utf-8") as fout:
+                        fout.write("\n".join(sorted(rules)))
+                    self.logger.debug(
+                        "合并IPCIDR规则文件",
+                        extra={
+                            "policy": policy,
+                            "output_file": dst_path,
+                            "rules_count": len(rules)
+                        }
+                    )
     
     def _merge_file_rules(self, file_path: str, policy: str, content_type: str, final_output_path: str) -> None:
         """
