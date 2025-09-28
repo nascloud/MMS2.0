@@ -12,18 +12,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     inotify-tools \
     build-essential \
+    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 依赖
+# 安装 Python 依赖和 Nuitka
 RUN pip install --upgrade pip && \
-    pip install httpx pyyaml requests watchdog python-json-logger pyinstaller
+    pip install httpx pyyaml requests watchdog python-json-logger nuitka
 
 # 复制源码
 COPY ./main.py $APP_DIR/
 COPY ./mihomo_sync/ $APP_DIR/mihomo_sync/
 
-# 打包为单一可执行文件
-RUN pyinstaller --onefile --name mms main.py
+# 用 Nuitka 编译为本地可执行文件
+RUN nuitka --onefile --output-filename=mms main.py
 
 # 第二阶段：精简运行环境
 FROM debian:bookworm-slim
@@ -116,7 +117,7 @@ COPY ./docker/docker-entrypoint.sh $APP_DIR/
 RUN chmod +x $APP_DIR/docker-entrypoint.sh
 
 # 只复制打包后的可执行文件
-COPY --from=builder /app/dist/mms $APP_DIR/mms
+COPY --from=builder /app/mms $APP_DIR/mms
 RUN chmod +x $APP_DIR/mms
 
 # 暴露端口
