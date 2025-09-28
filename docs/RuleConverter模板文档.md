@@ -28,11 +28,13 @@ RuleConverter（规则转换器）是 Mihomo-Mosdns 同步系统中的纯工具�
    - DOMAIN-REGEX → regexp:payload
    - IP-CIDR → payload (直接返回 CIDR 内容，不带前缀)
    - IP-CIDR6 → payload (直接返回 CIDR 内容，不带前缀)
+   - IP-SUFFIX → payload (直接返回 IP 后缀内容，不带前缀)
 
 4. **内容类型判断**：
-   - DOMAIN-SUFFIX, DOMAIN, DOMAIN-KEYWORD, DOMAIN-REGEX → domain
+   - DOMAIN-SUFFIX, DOMAIN, DOMAIN-KEYWORD, DOMAIN-REGEX, DOMAIN-WILDCARD → domain
    - IP-CIDR → ipv4
    - IP-CIDR6 → ipv6
+   - IP-SUFFIX → 根据内容判断是 ipv4 还是 ipv6
 
 ## 输入参数
 

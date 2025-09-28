@@ -46,6 +46,7 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 | mihomo_config_path | str | 否 | Mihomo 配置文件路径 |
 | orchestrator | RuleGenerationOrchestrator | 否 | 规则生成协调器实例 |
 | merger | RuleMerger | 否 | 规则合并器实例 |
+| downloader | RuleDownloader | 否 | 规则下载器实例 |
 
 ### start 方法
 
@@ -77,6 +78,7 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 - mihomo_config_path: Mihomo 配置文件路径
 - orchestrator: 规则生成协调器实例
 - merger: 规则合并器实例
+- downloader: 规则下载器实例
 - logger: 日志记录器
 - _last_state_hash: 上次状态哈希
 - _debounce_task: 防抖任务

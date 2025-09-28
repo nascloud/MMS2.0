@@ -28,8 +28,9 @@
 7. **规则生成协调器 (Rule Generation Orchestrator)**: 两阶段生成架构的第一阶段。负责从 Mihomo API 获取所有数据，并将其高效地转换为结构化的、按规则来源分类的中间文件。
 8. **规则转换器 (Rule Converter)**: 已重构为无状态的纯工具类，只提供逻辑转换功能，不执行任何 I/O 或网络操作。
 9. **规则合并器 (Rule Merger)**: 两阶段生成架构的第二阶段。负责读取规则生成协调器生成的结构化中间文件，高效地将它们合并、去重，并生成 Mosdns 使用的最终规则文件。
-10. **Mosdns 服务控制器**: 负责执行系统命令安全地重载 `mosdns` 服务，并**捕获执行结果**。
-11. **日志记录器 (Logger)**: 贯穿所有模块的日志中心，负责以**结构化 (JSON格式)** 输出所有事件。
+10. **规则下载器 (Rule Downloader)**: 负责并发下载并缓存规则文件，提高规则集获取的性能。
+11. **Mosdns 服务控制器**: 负责执行系统命令安全地重载 `mosdns` 服务，并**捕获执行结果**。
+12. **日志记录器 (Logger)**: 贯穿所有模块的日志中心，负责以**结构化 (JSON格式)** 输出所有事件。
 
 ##### 2.2 数据与逻辑流程图
 
@@ -186,7 +187,15 @@ graph TD
     * 如果一个策略同时包含IPv4和IPv6规则，则会生成两个独立的文件
  5. **错误处理**: 对于无法读取的文件，记录警告日志并继续处理其他文件。
 
-##### 3.9 `MosdnsServiceController` (服务控制器)
+##### 3.9 `RuleDownloader` (规则下载器)
+* **职责**: 负责并发下载并缓存规则文件，提高规则集获取的性能。
+* **暴露接口**: `download_rules(urls_to_update)`
+* **内部逻辑**:
+ 1. **并发下载**: 使用 asyncio.gather 并发下载多个规则文件
+ 2. **缓存机制**: 为每个下载的文件生成基于 URL 的 SHA256 哈希值作为缓存键
+ 3. **错误处理**: 对网络错误和 IO 错误进行适当的日志记录和处理
+
+##### 3.10 `MosdnsServiceController` (服务控制器)
 * **职责**: 与操作系统交互，控制 `mosdns` 服务并处理执行结果。
 * **暴露接口**: `reload()`
  * 使用 `subprocess` 模块执行 `ConfigManager` 中定义的重载命令。
@@ -398,119 +407,59 @@ graph TD
  "attempt": 2,
  "max_attempts": 5,
  "delay_seconds": 2.1,
- "error": "Connection timed out"
- }
- }
- ```
- * **Mosdns 重载失败**:
- ```json
- {
- "timestamp": "2023-10-27T10:15:30.800Z",
- "level": "ERROR",
- "service_name": "mihomo-mosdns-sync",
- "module": "MosdnsServiceController",
- "message": "Failed to execute mosdns reload command.",
- "context": {
- "command": "sudo mosdns reload -d /etc/mosdns",
- "return_code": 1,
- "stdout": "",
- "stderr": "Error: config file validation failed at line 42: unknown tag 'invalid_tag'"
+ "error": "TimeoutError"
  }
  }
  ```
 
-##### 7.2 配置文件解析错误处理
+##### 7.2 网络容错与重试机制
 
-当解析 Mihomo 配置文件时，系统需要处理以下错误情况：
+* **指数退避重试**: 所有网络请求都应实现指数退避重试逻辑，避免在网络波动时对服务造成过大压力。
+* **抖动**: 在重试间隔中加入随机抖动，防止多个客户端同时重试造成服务雪崩。
+* **超时控制**: 所有网络请求都应设置合理的超时时间，避免长时间阻塞。
 
-* **文件不存在**: 如果配置了 `mihomo_config_path` 但文件不存在，系统应记录 `ERROR` 级别日志并跳过本地配置文件解析。
-* **文件格式错误**: 如果配置文件不是有效的 YAML 格式，系统应记录 `ERROR` 级别日志并跳过本地配置文件解析。
-* **缺少必要字段**: 如果配置文件中缺少 `rule-providers` 字段，系统应记录 `WARN` 级别日志并继续使用 API 获取的信息。
+##### 7.3 原子化操作
 
-##### 7.3 本地文件读取错误处理
+* **文件写入**: 所有重要的文件写入操作都应是原子的，避免在写入过程中被中断导致文件损坏。
+* **状态更新**: 系统状态的更新应保证一致性，避免出现中间状态。
 
-在读取 rule-providers 的本地文件时，系统需要处理以下错误情况：
+##### 7.4 健康检查
 
-* **文件不存在**: 如果配置了 `path` 但文件不存在，系统应记录 `WARN` 级别日志并尝试从 URL 下载文件。
-* **文件读取失败**: 如果无法读取本地文件，系统应记录 `ERROR` 级别日志并尝试从 URL 下载文件。
-* **文件格式错误**: 如果本地文件格式不符合预期，系统应记录 `ERROR` 级别日志并尝试从 URL 下载文件。
+* **启动检查**: 服务启动时应进行健康检查，确保所有依赖服务都可用。
+* **运行时检查**: 在运行过程中定期进行健康检查，及时发现并处理问题。
 
-#### 8. 配置说明
+#### 8. 性能优化建议
 
-##### 8.1 配置文件格式
+##### 8.1 并发处理
 
-Mihomo 配置文件使用 YAML 格式，其中 `rule-providers` 部分定义了规则集的来源：
+* **API 请求**: 对于可以并行处理的 API 请求，应使用并发处理提高效率。
+* **文件操作**: 对于可以并行处理的文件操作，应使用并发处理提高效率。
 
-```
-# Rule providers
-rule-providers:
-  # Domain rule provider from URL
-  google_domains:
-    type: http
-    behavior: domain
-    url: "https://example.com/google_domains.list"
-    path: "./rules/google_domains.list"
-    interval: 86400
+##### 8.2 缓存机制
 
-  # IPCIDR rule provider from URL
-  private_ips:
-    type: http
-    behavior: ipcidr
-    url: "https://example.com/private_ips.list"
-    path: "./rules/private_ips.list"
-    interval: 86400
+* **数据缓存**: 对于不经常变化的数据，应使用缓存机制减少重复请求。
+* **计算结果缓存**: 对于计算密集型操作的结果，应使用缓存机制避免重复计算。
 
-  # Classical rule provider from URL
-  ads_rules:
-    type: http
-    behavior: classical
-    url: "https://example.com/ads_rules.yaml"
-    path: "./rules/ads_rules.yaml"
-    interval: 86400
+##### 8.3 内存管理
 
-  # Rule provider from local file
-  local_domains:
-    type: file
-    behavior: domain
-    path: "./rules/local_domains.list"
+* **及时释放**: 对于不再使用的对象，应及时释放内存。
+* **避免内存泄漏**: 应注意避免内存泄漏问题。
 
-  # MRS format rule provider
-  mrs_domains:
-    type: http
-    behavior: domain
-    format: mrs
-    url: "https://example.com/mrs_domains.mrs"
-    path: "./rules/mrs_domains.list"
-    interval: 86400
-```
+#### 9. 部署与运维
 
-##### 8.2 配置项说明
+##### 9.1 部署方式
 
-* **type**: 定义规则集的类型，可以是 `http`（从URL获取）或 `file`（从本地文件获取）
-* **behavior**: 定义规则集的行为类型，可以是 `domain`、`ipcidr` 或 `classical`
-* **format**: 定义规则集的格式，可以是 `yaml`、`text` 或 `mrs`
-* **url**: 当 type 为 `http` 时，定义获取规则集的URL
-* **path**: 定义本地文件路径，可以用于缓存远程规则集或直接使用本地规则集
-* **interval**: 定义自动更新间隔（秒）
+* **容器化部署**: 推荐使用 Docker 容器化部署，便于管理和扩展。
+* **配置管理**: 使用配置文件管理应用配置，便于在不同环境中部署。
 
-#### 9. 测试策略
+##### 9.2 监控与告警
 
-为了确保系统的稳定性和正确性，需要实施以下测试策略：
+* **日志监控**: 通过结构化日志监控系统运行状态。
+* **指标监控**: 监控关键性能指标，如响应时间、错误率等。
+* **告警机制**: 设置合理的告警机制，及时发现并处理问题。
 
-##### 9.1 单元测试
+##### 9.3 故障排查
 
-* **MihomoConfigParser**: 测试配置文件解析功能，包括正常情况和异常情况
-* **RuleConverter**: 测试规则转换功能，包括各种规则类型和格式
-* **RuleMerger**: 测试规则合并功能，确保生成正确的输出文件
-
-##### 9.2 集成测试
-
-* **API客户端**: 测试与 Mihomo API 的交互，包括正常响应和错误处理
-* **状态监控**: 测试状态变化检测和防抖机制
-* **端到端流程**: 测试从规则变化检测到 Mosdns 重载的完整流程
-
-##### 9.3 性能测试
-
-* **大规则集处理**: 测试处理大量规则时的性能表现
-* **并发处理**: 测试在高并发情况下的系统稳定性
-* **资源使用**: 监控系统资源使用情况，确保不会过度消耗CPU和内存
+* **日志分析**: 通过分析结构化日志快速定位问题。
+* **性能分析**: 通过性能监控工具分析系统瓶颈。
+* **调试工具**: 提供调试工具便于问题排查。

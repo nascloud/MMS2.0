@@ -34,7 +34,7 @@ RuleGenerationOrchestrator（规则生成协调器）是 Mihomo-Mosdns 同步系
      - 使用 PolicyResolver 解析策略链，确定最终的出口策略（DIRECT、PROXY 或 REJECT）
      - 从提供者信息中查找详细信息
      - 调用 RuleConverter.fetch_and_parse_ruleset 获取解析后的内容列表
-     - 根据规则内容自动识别类型（domain 或 ipcidr）
+     - 根据规则内容自动识别类型（domain、ipv4 或 ipv6）
      - 将内容列表批量添加到内存聚合器中
    - **对于单条规则**：
      - 获取其策略
@@ -89,23 +89,32 @@ RuleGenerationOrchestrator（规则生成协调器）是 Mihomo-Mosdns 同步系
    │   │   ├── provider_{provider_name1}.list
    │   │   ├── provider_{provider_name2}.list
    │   │   └── _inline_rules.list
-   │   └── ipcidr/
-   │       ├── provider_{provider_name3}.list
+   │   ├── ipv4/
+   │   │   ├── provider_{provider_name3}.list
+   │   │   └── _inline_rules.list
+   │   └── ipv6/
+   │       ├── provider_{provider_name4}.list
    │       └── _inline_rules.list
    ├── PROXY/
    │   ├── domain/
-   │   │   ├── provider_{provider_name4}.list
+   │   │   ├── provider_{provider_name5}.list
    │   │   └── _inline_rules.list
-   │   └── ipcidr/
+   │   ├── ipv4/
+   │   │   └── _inline_rules.list
+   │   └── ipv6/
    │       └── _inline_rules.list
    └── REJECT/
-       └── domain/
+       ├── domain/
+       │   └── _inline_rules.list
+       ├── ipv4/
+       │   └── _inline_rules.list
+       └── ipv6/
            └── _inline_rules.list
    ```
    其中：
    - `{mosdns_config_path}` 是配置文件中指定的 Mosdns 配置路径。例如，如果 `mosdns_config_path` 设置为 `D:\Software\MMS2.0\output`，则中间目录为 `D:\Software\MMS2.0\output_intermediate`。
    - DIRECT、PROXY、REJECT 是固定的策略文件夹名称，确保与 RuleMerger 模块的期望输入格式一致。
-   - `domain` 和 `ipcidr` 是内容类型，根据 RULE-SET 提供者的 behavior 属性或规则内容自动识别。
+   - `domain`、`ipv4` 和 `ipv6` 是内容类型，根据 RULE-SET 提供者的 behavior 属性或规则内容自动识别。
    - `provider_{provider_name}.list` 是从 RULE-SET 提供者获取的规则文件。
    - `_inline_rules.list` 是内联规则文件，包含直接在配置中定义的规则。
 
