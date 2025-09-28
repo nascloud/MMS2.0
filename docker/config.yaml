@@ -23,7 +23,7 @@ debounce_interval: 2      # 变化后触发操作前的等待时间（秒）- �
 # Mosdns 配置
 # 生成的 Mosdns 规则文件将保存在此目录中
 mosdns_config_path: "/etc/mosdns/rules"
-mosdns_reload_command: "kill -HUP $(pgrep mosdns)"     # 重载 Mosdns 服务的命令
+mosdns_reload_command: "mosdns service restart"     # 重载 Mosdns 服务的命令
 
 # 日志配置
 log_level: "INFO"         # 日志级别（DEBUG, INFO, WARN, ERROR, CRITICAL）

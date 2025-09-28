@@ -38,9 +38,12 @@ touch ./custom/local_ptr.txt
 
 echo "所有必需的 MosDNS 规则文件已准备就绪"
 
-# Start mosdns in background
-echo "Starting mosdns..."
-mosdns start -c /etc/mosdns/config.yaml -d /etc/mosdns &
+# 安装并启动 MosDNS 为系统服务
+echo "安装 MosDNS 为系统服务..."
+mosdns service install -c /etc/mosdns/config.yaml -d /etc/mosdns || true
+
+# 启动服务
+mosdns service start
 
 # Wait a moment for mosdns to start
 sleep 2
