@@ -1,0 +1,196 @@
+## -- Log Config -- ##
+log:
+  level: error
+  # file: "/etc/mosdns/mosdns.log"
+
+## -- API Config -- ##
+# api:
+  # http: "0.0.0.0:8338"
+
+## -- Plugins Config -- ##
+plugins:
+  ## --- Cache --- ##
+  - tag: lazy_cache
+    type: cache
+    args:
+      size: 10240 # 缓存大小
+      lazy_cache_ttl: 21600 # 缓存过期时间
+      dump_file: /etc/mosdns/cache.dump
+      dump_interval: 300  # 优化：缩短保存间隔
+
+  ## --- local DNS Servers --- ##
+  - tag: forward_local
+    type: forward
+    args:
+      concurrent: 10  # 优化：提高并发数
+      upstreams:
+        - addr: https://120.53.53.53/dns-query
+          bootstrap: "119.29.29.29"
+          bootstrap_version: 4
+        - addr: https://223.5.5.5/dns-query
+          bootstrap: "223.5.5.5"
+          bootstrap_version: 4
+
+  ## --- Remote DNS Servers --- ##
+  - tag: forward_remote
+    type: forward
+    args:
+      concurrent: 10  # 优化：提高并发数
+      upstreams:
+        - addr: 127.0.0.1:1053
+          enable_pipeline: false
+
+  ## --- Backup DNS Servers --- ##
+  - tag: forward_remote_backup
+    type: forward
+    args:
+      concurrent: 10  # 优化：提高并发数
+      upstreams:
+        - addr: 127.0.0.1:1053
+          enable_pipeline: false
+
+  ## --- Remote DNS Sequence --- ##
+  - tag: remote_dns
+    type: sequence
+    args:
+      - exec: query_summary forward_remote
+      - exec: $forward_remote
+      - matches:
+          - "!has_resp"  # 如果没有响应
+        exec: reject 3  # 返回 REFUSED，快速失败
+      - exec: ttl 1
+
+  ## --- Remote Backup DNS Sequence --- ##
+  - tag: remote_dns_backup
+    type: sequence
+    args:
+      - exec: query_summary forward_remote_backup
+      - exec: $forward_remote_backup
+      - matches:
+          - "!has_resp"  # 如果没有响应
+        exec: reject 3  # 返回 REFUSED，快速失败
+     # - exec: ttl 1
+
+  ## --- Remote DNS FAllBack --- ##
+  - tag: proxy_dns
+    type: "fallback"
+    args:
+      primary: remote_dns    # 主可执行插件的 tag
+      secondary: remote_dns_backup  # 副可执行插件的 tag
+      threshold: 500           # 无响应回滚阈值。单位毫秒。默认 500 。
+      always_standby: false     # 副可执行插件始终待命。 
+
+  ## --- Local Backup DNS Sequence --- ##
+  - tag: china_dns
+    type: sequence
+    args:
+      - exec: $lazy_cache
+      - matches:
+          - has_resp
+        exec: accept
+      - exec: query_summary forward_local
+      - exec: $forward_local
+      - matches:
+          - "!has_resp"  # 优化：增加错误处理
+        exec: reject 3
+
+  # - tag: other_ddns
+  #   type: sequence
+  #   args:
+  #     - exec: query_summary forward_local
+  #     - exec: $forward_local
+  #     - exec: ttl 1
+
+  ## ---     Rules     --- ##
+  - tag: "cn_match"
+    type: "domain_set"
+    args:
+      files:
+        - /etc/mosdns/rules/mihomo_direct_domain.txt
+
+  - tag: "proxy_match"
+    type: "domain_set"
+    args:
+      files:
+        - /etc/mosdns/rules/mihomo_proxy_domain.txt
+
+  - tag: "custom_direct"
+    type: "domain_set"
+    args:
+      files:
+        - ./custom/direct.txt
+
+  - tag: "custom_proxy"
+    type: "domain_set"
+    args:
+      files:
+        - ./custom/proxy.txt
+
+  - tag: "ptr_match"
+    type: "domain_set"
+    args:
+      files:
+        - ./custom/local_ptr.txt
+
+  - tag: "mms_reject_domain"
+    type: "domain_set"
+    args:
+      files:
+        - /etc/mosdns/rules/mihomo_reject_domain.txt
+
+  # - tag: "ddns_match"
+  #   type: "domain_set"
+  #   args:
+  #     files:
+  #       - ./custom/ddns.txt
+
+  ## --- Main Sequence --- ##
+  - tag: sequence_main
+    type: sequence
+    args:
+      - exec: metrics_collector metrics
+      # - matches:
+      #     - qtype 65
+      #   exec: reject 3
+
+      - matches:
+          - qtype 12
+          - qname $ptr_match
+        exec: reject 3
+
+      - exec: prefer_ipv4
+############################
+#ddns
+      # - matches:
+      #     - qname $ddns_match
+      #   exec: goto other_ddns
+#自定义直链
+      - matches:
+          - qname $custom_direct
+        exec: goto china_dns
+
+#自定义代理
+      - matches:
+          - qname $custom_proxy
+        exec: $proxy_dns
+#######################
+      # MMS 生成的规则
+      - matches:
+          - qname $mms_reject_domain
+        exec: reject 3
+
+      - matches:
+          - qname $proxy_match
+        exec: $proxy_dns
+
+      - matches:
+          - qname $cn_match
+        exec: goto china_dns
+
+      - exec: $proxy_dns
+
+  ## --- Server Configuration --- ##
+  - type: udp_server
+    args:
+      entry: sequence_main
+      listen: :53

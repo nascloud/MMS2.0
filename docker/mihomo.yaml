@@ -1,0 +1,279 @@
+mixed-port: 7890
+# http(s)/socks/mixed代理的用户验证
+# authentication:
+# - "user1:pass1"
+# - "user2:pass2"
+authentication: [""]
+allow-lan: true
+log-level: error
+ipv6: false
+unified-delay: true
+# tcp-concurrent: true
+external-controller: :9090
+secret: "mihomo666"
+external-ui: ui
+external-ui-url: "https://docker.lzdrc.cf/https://github.com/Zephyruso/zashboard/releases/latest/download/dist.zip"
+
+geodata-mode: false
+# GEO 文件加载模式（standard：标准加载器/memconservative：专为内存受限 (小内存) 设备优化的加载器 (默认值)）
+geodata-loader: standard
+geo-auto-update: true
+geo-update-interval: 48
+geox-url:
+  geoip: "https://docker.lzdrc.cf/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geoip-lite.dat"
+  geosite: "https://docker.lzdrc.cf/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/geosite.dat"
+  mmdb: "https://docker.lzdrc.cf/https://github.com/MetaCubeX/meta-rules-dat/releases/download/latest/country-lite.mmdb"
+  asn: "https://docker.lzdrc.cf/https://github.com/xishang0128/geoip/releases/download/latest/GeoLite2-ASN.mmdb"
+
+# 用于下载订阅时指定UA
+global-ua: clash.meta
+
+tun:
+  enable: true
+  stack: mixed
+  dns-hijack:
+   - any:1053
+   - tcp://any:1053
+  # auto-route: true
+  # auto-redirect: true
+  # auto-detect-interface: true
+
+
+dns:
+    enable: true
+    listen: '0.0.0.0:1053'
+    ipv6: false
+    respect-rules: true
+    default-nameserver: [119.29.29.29, 223.5.5.5]
+    enhanced-mode: fake-ip
+    fake-ip-range: 198.88.0.1/16
+    use-hosts: false
+    use-system-hosts: true
+    nameserver:
+      - https://120.53.53.53/dns-query
+      - https://223.5.5.5/dns-query
+    fake-ip-filter:
+      - "*"
+      - "+.lan"
+      - "+.local"
+      - "+.market.xiaomi.com"
+    proxy-server-nameserver:
+      - https://120.53.53.53/dns-query
+      - https://223.5.5.5/dns-query
+    nameserver-policy:
+      '+.arpa': '192.168.50.254'
+      'rule-set:cn_domain,direct_domain,ai_domain_cn':
+        - https://223.6.6.6/dns-query
+        - https://120.53.53.53/dns-query
+      'rule-set:geolocation-!cn,proxy_domain,youtube_domain,google_domain,spotify_domain,ai_domain,ai_domain_!cn,github_domain,twitter_domain,telegram_domain,netflix_domain,bahamut_domain,bilibili_domain':
+        - https://dns.google/dns-query
+        - https://cloudflare-dns.com/dns-query
+        - https://175.178.106.166:8009/dns-query/mai
+######### 锚点 start #######
+#这里是订阅更新和延迟测试相关的
+pp: &pp {type: http, interval: 3600, health-check: {enable: true, url: "https://www.apple.com/library/test/success.html", interval: 300}}
+######### 锚点 end #######
+proxy-providers:
+  SubLink:
+    url: "你的订阅链接"
+    path: "./providers/SubLink.yaml"
+    <<: *pp
+
+  Home:
+    url: "你的订阅链接"
+    path: "./providers/Home.yaml"
+    <<: *pp 
+
+######### 锚点 start #######
+#这里是策略组类型相关的
+fb: &fb {type: fallback, url: 'https://www.apple.com/library/test/success.html', interval: 60, lazy: true, timeout: 3000, max-failed-times: 2}
+ut: &ut {type: url-test, tolerance: 100, lazy: true, url: 'https://www.apple.com/library/test/success.html', interval: 300}
+lb: &lb {type: load-balance, strategy: consistent-hashing, lazy: true, url: 'https://www.apple.com/library/test/success.html', interval: 300}
+dr: &dr {type: select, proxies: ['🎯 本机直连', '🚀 节点选择', '🇯🇵 日本|Auto','🇭🇰 香港|Auto', '🇹🇼 台湾|Auto', '🇸🇬 新加坡|Auto', '🇺🇸 美国|Auto', '🛠️ 手动选择'] }
+pr: &pr {type: select, proxies: ['🚀 节点选择', '🇯🇵 日本|Auto','🇭🇰 香港|Auto', '🇹🇼 台湾|Auto', '🇸🇬 新加坡|Auto', '🇺🇸 美国|Auto', '🎯 本机直连', '🛠️ 手动选择'] }
+######### 锚点 end #######
+
+proxy-groups:
+  - { name: 🚀 节点选择, type: select, proxies: ['♻️ Auto', '🇯🇵 日本|Auto','🇭🇰 香港|Auto', '🇹🇼 台湾|Auto', '🇸🇬 新加坡|Auto', '🇺🇸 美国|Auto', 🎯 本机直连] }
+  - { name: ♻️ Auto, type: fallback, proxies: ['🇯🇵 日本|Auto','🇭🇰 香港|Auto', '🇹🇼 台湾|Auto', '🇸🇬 新加坡|Auto', '🇺🇸 美国|Auto'], <<: *fb }
+  - { name: 🤖 人工智能, type: select, <<: *pr }
+  - { name: 📲 电报消息, type: select, <<: *pr }
+  - { name: 📹 海外视频, type: select, <<: *pr }
+  - { name: 📧 谷歌服务, type: select, <<: *pr }
+  - { name: 📺 哔哩哔哩, type: select, <<: *dr}
+  - { name: 📈 网络测试, type: select, <<: *dr}
+  - { name: 🐟 漏网之鱼, type: select, <<: *dr}
+  
+# 节点组  
+
+  # 订阅节点
+  - { name: 🛠️ 手动选择, <<: *fb, use: [SubLink]}
+  - { name: '🇭🇰 香港|Auto', <<: *fb, use: ['SubLink'], filter: "(?i)港|hk|hongkong|hong kong" }
+  - { name: '🇹🇼 台湾|Auto', <<: *fb, use: ['SubLink'],filter: "(?i)台湾|tw" }
+  - { name: '🇸🇬 新加坡|Auto', <<: *fb, use: ['SubLink'],filter: "(?i)新加坡|sg|singapore" }
+  - { name: '🇯🇵 日本|Auto', <<: *fb, use: ['SubLink'],filter: "(?i)日本|jp|japan" }
+  - { name: '🇺🇸 美国|Auto', <<: *fb, use: ['SubLink'],filter: "(?i)美国|us|usa" }
+
+  # 回家节点
+  - { name: '🏠 Home', <<: *fb, use: [Home], filter: "(?i)home"}
+
+  # 直连节点
+  - { name: 🎯 本机直连, type: select, proxies: [DIRECT]}
+  
+rules:
+  - AND,((DST-PORT,443),(NETWORK,UDP)),REJECT
+  - AND,((SRC-IP-CIDR,192.168.50.0/24),(IP-CIDR,192.168.50.0/24)),DIRECT
+  - IP-CIDR,192.168.50.0/24,🏠 Home
+  - DOMAIN-SUFFIX,adobe.io,REJECT
+  - DOMAIN-SUFFIX,xn--ngstr-lra8j.com,📧 谷歌服务
+  - RULE-SET,private_domain,🎯 本机直连
+  - RULE-SET,direct_domain,🎯 本机直连
+  - RULE-SET,proxy_domain,🚀 节点选择
+  - RULE-SET,talkatone_ad,REJECT
+  - RULE-SET,talkatone_proxy,🇺🇸 美国|Auto
+  - RULE-SET,networktest,📈 网络测试
+  - RULE-SET,spotify_domain,🇸🇬 新加坡|Auto
+  - RUlE-SET,ai_domain_cn,🎯 本机直连
+  - RULE-SET,ai_domain,🤖 人工智能
+  - RULE-SET,ai_domain_!cn,🤖 人工智能
+  - RULE-SET,github_domain,🚀 节点选择
+  - RULE-SET,twitter_domain,🚀 节点选择
+  - RULE-SET,youtube_domain,📧 谷歌服务
+  - RULE-SET,google_domain,📧 谷歌服务
+  - RULE-SET,telegram_domain,📲 电报消息
+  - RULE-SET,netflix_domain,📹 海外视频
+  - RULE-SET,bahamut_domain,📹 海外视频
+  - RULE-SET,bilibili_domain,📺 哔哩哔哩
+  - RULE-SET,cn_domain,🎯 本机直连
+  - RULE-SET,geolocation-!cn,🚀 节点选择
+  - RULE-SET,private_ip,🎯 本机直连,no-resolve
+  - RULE-SET,netflix_ip,📹 海外视频,no-resolve
+  - RULE-SET,telegram_ip,📲 电报消息,no-resolve
+  - RULE-SET,cn_ip,🎯 本机直连,no-resolve
+  - MATCH,🐟 漏网之鱼
+
+######### 锚点 start #######
+#这里是规则组类型相关的
+domain: &domain {type: http, behavior: domain, format: mrs, interval: 86400}
+ip: &ip {type: http, behavior: ipcidr, format: mrs, interval: 86400}
+list: &list {type: http, behavior: domain, format: text, interval: 86400}
+classical: &classical {type: http, behavior: classical, format: text, interval: 86400}
+######### 锚点 end #######
+
+rule-providers:
+  fakeip-filter:
+    url: "https://docker.lzdrc.cf/https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/fakeip-filter.mrs"
+    path: "./rules/fakeip-filter.mrs"
+    <<: *domain
+  private_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/private.mrs"
+    path: "./rules/private.mrs"
+  cn_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/cn.mrs"
+    path: "./rules/cn.mrs"
+  biliintl_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/biliintl.mrs"
+    path: "./rules/biliintl.mrs"
+  ai_domain_!cn:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/category-ai-!cn.mrs"
+    path: "./rules/category-ai-!cn.mrs"
+  ai_domain_cn:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/refs/heads/meta/geo/geosite/category-ai-cn.mrs"
+    path: "./rules/category-ai-cn.mrs"
+  github_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/github.mrs"
+    path: "./rules/github.mrs"
+  twitter_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/twitter.mrs"
+    path: "./rules/twitter.mrs"
+  youtube_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/youtube.mrs"
+    path: "./rules/youtube.mrs"
+  google_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/google.mrs"
+    path: "./rules/google.mrs"
+  telegram_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/telegram.mrs"
+    path: "./rules/telegram.mrs"
+  netflix_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/netflix.mrs"
+    path: "./rules/netflix.mrs"
+  bilibili_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bilibili.mrs"
+    path: "./rules/bilibili.mrs"
+  bahamut_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/bahamut.mrs"
+    path: "./rules/bahamut.mrs"
+  spotify_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/spotify.mrs"
+    path: "./rules/spotify.mrs"
+  pixiv_domain:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/pixiv.mrs"
+    path: "./rules/pixiv.mrs"
+  geolocation-!cn:
+    <<: *domain
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geosite/geolocation-!cn.mrs"
+    path: "./rules/geolocation-!cn.mrs"
+  private_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/private.mrs"
+    path: "./rules/private.mrs"
+  cn_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/cn.mrs"
+    path: "./rules/cn.mrs"
+  google_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/google.mrs"
+    path: "./rules/google.mrs"
+  netflix_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/netflix.mrs"
+    path: "./rules/netflix.mrs"
+  twitter_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/twitter.mrs"
+    path: "./rules/twitter.mrs"
+  telegram_ip:
+    <<: *ip
+    url: "https://docker.lzdrc.cf/https://raw.githubusercontent.com/MetaCubeX/meta-rules-dat/meta/geo/geoip/telegram.mrs"
+    path: "./rules/telegram.mrs"
+  networktest:
+    url: "https://docker.lzdrc.cf/https://github.com/DustinWin/ruleset_geodata/releases/download/mihomo-ruleset/networktest.list"
+    path: "./rules/networktest.list"
+    <<: *classical
+  talkatone_ad:
+    url: "https://docker.lzdrc.cf/https://gist.githubusercontent.com/echowiz/f51837ac7525a75383c48275b9f4f692/raw/talkatone-ad.list"
+    path: "./rules/talkatone-ad.list"
+    <<: *classical
+  talkatone_proxy:
+    url: "https://docker.lzdrc.cf/https://gist.githubusercontent.com/echowiz/f51837ac7525a75383c48275b9f4f692/raw/talkatone-proxy.list"
+    path: "./rules/talkatone-proxy.list"
+    <<: *classical
+  direct_domain:
+    url: "https://docker.lzdrc.cf/https://gist.githubusercontent.com/echowiz/f51837ac7525a75383c48275b9f4f692/raw/direct.list"
+    path: "./rules/direct.list"
+    <<: *list
+  proxy_domain:
+    url: "https://docker.lzdrc.cf/https://gist.githubusercontent.com/echowiz/f51837ac7525a75383c48275b9f4f692/raw/proxy.list"
+    path: "./rules/proxy.list"
+    <<: *list
+  ai_domain:
+    url: "https://docker.lzdrc.cf/https://gist.githubusercontent.com/echowiz/f51837ac7525a75383c48275b9f4f692/raw/ai.list"
+    path: "./rules/ai.list"
+    <<: *list
