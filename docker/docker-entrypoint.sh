@@ -20,6 +20,22 @@ else
     echo "找到 Mihomo 配置文件: /etc/mihomo/config.yaml"
 fi
 
+# 创建 MosDNS 必需的规则文件目录和空文件
+echo "创建 MosDNS 规则文件目录..."
+mkdir -p /etc/mosdns/rules
+mkdir -p ./custom
+
+# 创建 MosDNS 配置中必需的规则文件（如果不存在）
+echo "检查并创建必需的 MosDNS 规则文件..."
+touch /etc/mosdns/rules/direct_domain.txt
+touch /etc/mosdns/rules/proxy_domain.txt
+touch /etc/mosdns/rules/reject_domain.txt
+touch ./custom/direct.txt
+touch ./custom/proxy.txt
+touch ./custom/local_ptr.txt
+
+echo "所有必需的 MosDNS 规则文件已准备就绪"
+
 # Start mosdns in background
 echo "Starting mosdns..."
 mosdns start -c /etc/mosdns/config.yaml -d /etc/mosdns &
