@@ -134,7 +134,7 @@ class RuleDownloader:
             return
 
         if response.status_code == 304:
-            self.logger.info(f"缓存命中 (304): {url}")
+            self.logger.debug(f"缓存命中 (304): {url}")
             return
 
         # 3. 下载新内容并更新缓存
@@ -152,7 +152,7 @@ class RuleDownloader:
         elif os.path.exists(meta_path):
             os.remove(meta_path)
         
-        self.logger.info(f"成功更新缓存: {url}")
+        self.logger.debug(f"成功更新缓存: {url}")
 
     async def download_rules(self, urls: List[str]):
         """
@@ -161,7 +161,7 @@ class RuleDownloader:
         if not urls:
             return
         
-        self.logger.info(f"开始并发检查/下载 {len(urls)} 个规则文件...")
+        self.logger.debug(f"开始并发检查/下载 {len(urls)} 个规则文件...")
         tasks = [self._ensure_rule_updated(url) for url in urls]
         await asyncio.gather(*tasks)
-        self.logger.info("所有规则文件下载任务完成。")
+        self.logger.debug("所有规则文件下载任务完成。")

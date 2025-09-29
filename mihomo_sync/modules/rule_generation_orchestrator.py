@@ -48,7 +48,7 @@ class RuleGenerationOrchestrator:
         Returns:
             str: 生成的中间目录路径
         """
-        self.logger.info("正在启动规则生成协调...")
+        self.logger.debug("正在启动规则生成协调...")
         start_time = time.time()
         
         try:

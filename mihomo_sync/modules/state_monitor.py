@@ -273,7 +273,7 @@ class StateMonitor:
 
     async def start(self):
         """启动监控循环。"""
-        self.logger.info("正在启动状态监控器")
+        self.logger.debug("正在启动状态监控器")
         monitor_start_time = time.time()
         cycle_count = 0
         
@@ -394,12 +394,12 @@ class StateMonitor:
                 return
                 
             # 阶段一：分发。调用Orchestrator生成中间文件。
-            self.logger.info("阶段一：正在生成中间规则文件...")
+            self.logger.debug("阶段一：正在生成中间规则文件...")
             intermediate_start_time = time.time()
             intermediate_path = await self.orchestrator.run()
             intermediate_duration = time.time() - intermediate_start_time
             
-            self.logger.info(
+            self.logger.debug(
                 f"中间文件成功生成于: {intermediate_path}",
                 extra={
                     "阶段一耗时_秒": round(intermediate_duration, 3)
@@ -407,13 +407,13 @@ class StateMonitor:
             )
 
             # 阶段二：合并。调用Merger生成最终文件。
-            self.logger.info("阶段二：正在合并规则文件...")
+            self.logger.debug("阶段二：正在合并规则文件...")
             merge_start_time = time.time()
             final_path = self.mosdns_config_path
             self.merger.merge_from_intermediate(intermediate_path, final_path)
             merge_duration = time.time() - merge_start_time
             
-            self.logger.info(
+            self.logger.debug(
                 f"最终规则文件成功生成于: {final_path}",
                 extra={
                     "阶段二耗时_秒": round(merge_duration, 3)

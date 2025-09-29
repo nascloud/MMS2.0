@@ -30,7 +30,7 @@ class MosdnsServiceController:
         Returns:
             bool: 如果重新加载和状态检查都成功返回True，否则返回False
         """
-        self.logger.info("正在重新加载Mosdns服务")
+        self.logger.debug("正在重新加载Mosdns服务")
         reload_start_time = time.time()
         try:
             process = await asyncio.create_subprocess_shell(
@@ -85,7 +85,7 @@ class MosdnsServiceController:
             bool: 如果重启成功返回True，否则返回False
         """
         command = "mosdns service restart"
-        self.logger.info("正在重启Mosdns服务")
+        self.logger.debug("正在重启Mosdns服务")
         start_time = time.time()
         try:
             process = await asyncio.create_subprocess_shell(
@@ -112,7 +112,7 @@ class MosdnsServiceController:
             bool: 如果停止成功返回True，否则返回False
         """
         command = "mosdns service stop"
-        self.logger.info("正在停止Mosdns服务")
+        self.logger.debug("正在停止Mosdns服务")
         start_time = time.time()
         try:
             process = await asyncio.create_subprocess_shell(
@@ -139,7 +139,7 @@ class MosdnsServiceController:
             str: 服务状态输出
         """
         command = "mosdns service status"
-        self.logger.info("查询Mosdns服务状态")
+        self.logger.debug("查询Mosdns服务状态")
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
