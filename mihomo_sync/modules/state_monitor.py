@@ -438,13 +438,14 @@ class StateMonitor:
                 }
             )
 
-            self.logger.info(
-                    f"DNS规则同步流程已成功完成，耗时 {round(total_duration, 3)} 秒！",
-                    extra={
-                        "总耗时_秒": round(total_duration, 3),
-                        "reload_success": reload_success
-                    }
-                )
+            if reload_success:
+                self.logger.info(
+                        f"DNS规则同步流程已成功完成，耗时 {round(total_duration, 3)} 秒！",
+                        extra={
+                            "总耗时_秒": round(total_duration, 3),
+                            "reload_success": reload_success
+                        }
+                    )
             else:
                 self.logger.error(
                     "规则生成完成但服务重载失败",
