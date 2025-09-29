@@ -158,7 +158,7 @@ class RuleGenerationOrchestrator:
             
             total_duration = time.time() - start_time
             self.logger.info(
-                f"中间文件成功生成于: {self.intermediate_dir}",
+                f"规则中间文件已生成到: {self.intermediate_dir}",
                 extra={
                     "总耗时_秒": round(total_duration, 3),
                     "API获取耗时_秒": round(api_duration, 3),

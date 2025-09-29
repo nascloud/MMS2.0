@@ -51,7 +51,7 @@ class MosdnsServiceController:
                 )
                 # 检查服务状态
                 status = await self.status()
-                self.logger.info("Mosdns服务状态检查", extra={"status": status})
+                self.logger.info("正在检查Mosdns服务状态", extra={"status": status})
                 return True
             else:
                 self.logger.error(
@@ -96,7 +96,7 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             duration = time.time() - start_time
             if process.returncode == 0:
-                self.logger.info("Mosdns服务重启成功", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
+                self.logger.info("Mosdns服务已成功重启", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
                 return True
             else:
                 self.logger.error("Mosdns服务重启失败", extra={"stderr": stderr.decode().strip(), "耗时": round(duration, 3)})
@@ -123,7 +123,7 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             duration = time.time() - start_time
             if process.returncode == 0:
-                self.logger.info("Mosdns服务停止成功", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
+                self.logger.info("Mosdns服务已成功停止", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
                 return True
             else:
                 self.logger.error("Mosdns服务停止失败", extra={"stderr": stderr.decode().strip(), "耗时": round(duration, 3)})
@@ -149,7 +149,7 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             if process.returncode == 0:
                 status_output = stdout.decode().strip()
-                self.logger.info("Mosdns服务状态:", extra={"status": status_output})
+                self.logger.info("Mosdns服务当前状态:", extra={"status": status_output})
                 return status_output
             else:
                 error_output = stderr.decode().strip()

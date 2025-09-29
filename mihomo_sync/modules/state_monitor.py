@@ -421,7 +421,7 @@ class StateMonitor:
             )
 
             # 阶段三：重载。通知Mosdns应用新规则。
-            self.logger.info("阶段三：正在重载Mosdns服务...")
+            self.logger.info("正在重新加载Mosdns服务...")
             reload_start_time = time.time()
             reload_success = await self.mosdns_controller.reload()
             reload_duration = time.time() - reload_start_time
@@ -430,7 +430,7 @@ class StateMonitor:
             
             # 添加文件更新确认日志
             self.logger.info(
-                "规则文件更新完成",
+                "DNS规则文件更新完成",
                 extra={
                     "output_directory": final_path,
                     "更新时间": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -438,14 +438,11 @@ class StateMonitor:
                 }
             )
 
-            if reload_success:
-                self.logger.info(
-                    "规则生成与重载流程全部成功完成！",
+            self.logger.info(
+                    f"DNS规则同步流程已成功完成，耗时 {round(total_duration, 3)} 秒！",
                     extra={
                         "总耗时_秒": round(total_duration, 3),
-                        "阶段一耗时_秒": round(intermediate_duration, 3),
-                        "阶段二耗时_秒": round(merge_duration, 3),
-                        "阶段三耗时_秒": round(reload_duration, 3)
+                        "reload_success": reload_success
                     }
                 )
             else:
