@@ -9,8 +9,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     curl \
     unzip \
     gzip \
-    procps \
-    inotify-tools \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
@@ -25,26 +23,10 @@ COPY ./mihomo_sync/ $APP_DIR/mihomo_sync/
 # 打包为单一可执行文件
 RUN pyinstaller --onefile --name mms main.py
 
-# 第二阶段：精简运行环境
-FROM python:3.11-slim
-
-ENV APP_DIR=/app
-WORKDIR $APP_DIR
-
-# 安装必要运行依赖
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    unzip \
-    gzip \
-    procps \
-    inotify-tools \
-    && rm -rf /var/lib/apt/lists/*
-
 # 下载并安装最新版 mihomo (amd64)
 RUN set -e && \
     echo "Getting latest mihomo release..." && \
     RELEASE_JSON=$(curl -s "https://api.github.com/repos/MetaCubeX/mihomo/releases/latest") && \
-    echo "Release JSON: $RELEASE_JSON" && \
     LATEST_MIHOMO=$(echo "$RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
     echo "Latest mihomo version: $LATEST_MIHOMO" && \
     if [ -z "$LATEST_MIHOMO" ]; then echo "Failed to get latest version"; exit 1; fi && \
@@ -77,7 +59,6 @@ RUN set -e && \
 RUN set -e && \
     echo "Getting latest mosdns release..." && \
     RELEASE_JSON=$(curl -s "https://api.github.com/repos/IrineSistiana/mosdns/releases/latest") && \
-    echo "Release JSON: $RELEASE_JSON" && \
     LATEST_MOSDNS=$(echo "$RELEASE_JSON" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/' | head -1) && \
     echo "Latest mosdns version: $LATEST_MOSDNS" && \
     if [ -z "$LATEST_MOSDNS" ]; then echo "Failed to get latest version"; exit 1; fi && \
@@ -106,6 +87,20 @@ RUN set -e && \
     rm -rf "$FILENAME" *.md *.yaml LICENSE __MACOSX 2>/dev/null || true && \
     echo "mosdns installed successfully"
 
+# 第二阶段：精简运行环境
+FROM python:3.11-slim
+
+ENV APP_DIR=/app
+WORKDIR $APP_DIR
+
+# 安装必要运行依赖
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    procps \
+    net-tools \
+	dnsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+
 # 复制配置文件到默认配置目录
 COPY ./docker/config.yaml $APP_DIR/config/
 COPY ./docker/mihomo.yaml /default-configs/
@@ -117,7 +112,12 @@ RUN chmod +x $APP_DIR/docker-entrypoint.sh
 
 # 只复制打包后的可执行文件
 COPY --from=builder /app/dist/mms $APP_DIR/mms
+COPY --from=builder /usr/local/bin/mosdns /usr/local/bin/mosdns
+COPY --from=builder /usr/local/bin/mihomo /usr/local/bin/mihomo
 RUN chmod +x $APP_DIR/mms
+RUN chmod +x /usr/local/bin/mosdns
+RUN chmod +x /usr/local/bin/mihomo
+
 
 # 暴露端口
 EXPOSE 53/tcp 53/udp
