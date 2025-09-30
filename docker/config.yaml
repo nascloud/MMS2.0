@@ -6,7 +6,15 @@ mihomo_api_secret: "mihomo666"           # API 认证密钥（如果需要）
 # Mihomo 配置文件路径
 # Mihomo 配置文件的路径（例如："/etc/mihomo/config.yaml"）
 # 这是访问静态 rule-provider 定义所必需的，这些定义无法通过 API 获得
-mihomo_config_path: "/etc/mihomo/config.yaml"                   
+mihomo_config_path: "/etc/mihomo/config.yaml"   
+
+# Mosdns 配置
+# 生成的 Mosdns 规则文件将保存在此目录中
+mosdns_rules_path: "/etc/mosdns/rules"
+mosdns_reload_command: "mosdns service restart"     # 重载 Mosdns 服务的命令
+
+# 缓存目录路径，用于存储下载的规则文件
+cache_dir_path: "/app/cache"
 
 # API 重试配置
 # 指数退避与抖动的配置
@@ -19,11 +27,6 @@ api_retry_config:
 # 监控配置
 polling_interval: 5      # 轮询 Mihomo API 变化的时间间隔（秒）- 增加到5秒以减少误触发
 debounce_interval: 2      # 变化后触发操作前的等待时间（秒）- 增加到2秒以过滤临时波动
-
-# Mosdns 配置
-# 生成的 Mosdns 规则文件将保存在此目录中
-mosdns_config_path: "/etc/mosdns/rules"
-mosdns_reload_command: "mosdns service restart"     # 重载 Mosdns 服务的命令
 
 # 日志配置
 log_level: "INFO"         # 日志级别（DEBUG, INFO, WARN, ERROR, CRITICAL）

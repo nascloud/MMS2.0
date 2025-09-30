@@ -13,7 +13,7 @@ from mihomo_sync.modules.policy_resolver import PolicyResolver
 class StateMonitor:
     """一个监控器，用于检测Mihomo状态的变化并使用去抖动逻辑触发操作。"""
     
-    def __init__(self, api_client, mosdns_controller, mosdns_config_path: str, 
+    def __init__(self, api_client, mosdns_controller, mosdns_rules_path: str, 
                  polling_interval: float, debounce_interval: float,
                  mihomo_config_parser=None, mihomo_config_path: str = "",
                  orchestrator: Optional[RuleGenerationOrchestrator] = None, 
@@ -24,7 +24,7 @@ class StateMonitor:
         Args:
             api_client: MihomoApiClient的实例
             mosdns_controller: Mosdns服务的控制器
-            mosdns_config_path (str): Mosdns配置文件的输出目录路径
+            mosdns_rules_path (str): Mosdns配置文件的输出目录路径
             polling_interval (float): 轮询时间间隔（秒）
             debounce_interval (float): 变化后触发操作前的等待时间（秒）
             mihomo_config_parser: Mihomo本地配置文件的解析器
@@ -34,7 +34,7 @@ class StateMonitor:
         """
         self.api_client = api_client
         self.mosdns_controller = mosdns_controller
-        self.mosdns_config_path = mosdns_config_path
+        self.mosdns_config_path = mosdns_rules_path
         self.polling_interval = polling_interval
         self.debounce_interval = debounce_interval
         self.mihomo_config_parser = mihomo_config_parser
@@ -46,12 +46,12 @@ class StateMonitor:
         self._last_state_snapshot = None
         self._debounce_task = None
         self.policy_resolver = PolicyResolver()
-        self.logger.debug(
+        self.logger.info(
             "状态监控器初始化完成",
             extra={
                 "polling_interval": polling_interval,
                 "debounce_interval": debounce_interval,
-                "mosdns_config_path": mosdns_config_path
+                "mosdns_config_path": mosdns_rules_path
             }
         )
 
@@ -273,7 +273,7 @@ class StateMonitor:
 
     async def start(self):
         """启动监控循环。"""
-        self.logger.debug("正在启动状态监控器")
+        self.logger.info("状态监控器启动成功")
         monitor_start_time = time.time()
         cycle_count = 0
         
@@ -288,7 +288,7 @@ class StateMonitor:
                 # 与之前的状态进行比较
                 if self._last_state_hash is not None and current_state_hash != self._last_state_hash:
                     self.logger.info(
-                        "检测到状态变化",
+                        "检测到状态变化,开始更新...",
                         extra={
                             "previous_hash": self._last_state_hash[:16] + "...",
                             "current_hash": current_state_hash[:16] + "...",
@@ -440,12 +440,12 @@ class StateMonitor:
 
             if reload_success:
                 self.logger.info(
-                        f"DNS规则同步流程已成功完成，耗时 {round(total_duration, 3)} 秒！",
-                        extra={
-                            "总耗时_秒": round(total_duration, 3),
-                            "reload_success": reload_success
-                        }
-                    )
+                    f"DNS规则同步流程已成功完成，耗时 {round(total_duration, 3)} 秒！",
+                    extra={
+                        "总耗时_秒": round(total_duration, 3),
+                        "reload_success": reload_success
+                    }
+                )
             else:
                 self.logger.error(
                     "规则生成完成但服务重载失败",

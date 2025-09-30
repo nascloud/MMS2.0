@@ -39,7 +39,7 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 |--------|------|------|------|
 | api_client | MihomoApiClient | 是 | Mihomo API 客户端实例 |
 | mosdns_controller | MosdnsServiceController | 是 | Mosdns 服务控制器实例 |
-| mosdns_config_path | str | 是 | Mosdns 配置文件输出目录路径 |
+| mosdns_rules_path | str | 是 | Mosdns 配置文件输出目录路径 |
 | polling_interval | float | 是 | 轮询间隔（秒） |
 | debounce_interval | float | 是 | 防抖间隔（秒） |
 | mihomo_config_parser | MihomoConfigParser | 否 | Mihomo 配置解析器实例 |
@@ -71,7 +71,7 @@ StateMonitor（状态监控器）是 Mihomo-Mosdns 同步系统的核心驱动�
 该方法没有返回值，但会初始化以下实例变量：
 - api_client: Mihomo API 客户端实例
 - mosdns_controller: Mosdns 服务控制器实例
-- mosdns_config_path: Mosdns 配置文件输出目录路径
+- mosdns_rules_path: Mosdns 配置文件输出目录路径
 - polling_interval: 轮询间隔
 - debounce_interval: 防抖间隔
 - mihomo_config_parser: Mihomo 配置解析器实例

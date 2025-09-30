@@ -30,7 +30,7 @@ class RuleGenerationOrchestrator:
         self.config = config
         self.mihomo_config_parser = mihomo_config_parser
         self.mihomo_config_path = mihomo_config_path
-        self.intermediate_dir = self.config.get_mosdns_config_path() + "_intermediate"
+        self.intermediate_dir = self.config.get_mosdns_rules_path() + "_intermediate"
         self.logger = logging.getLogger(__name__)
         self.policy_resolver = PolicyResolver()
         self.logger.debug(
@@ -116,7 +116,18 @@ class RuleGenerationOrchestrator:
             
             # 步骤5：设置环境：创建共享客户端和模块实例
             async with httpx.AsyncClient() as client:
-                cache_path = os.path.join(self.intermediate_dir, ".cache")
+                # 使用配置文件中的缓存目录路径，如果未设置则使用默认路径
+                cache_path = self.config.get_cache_dir_path()
+                if not cache_path:
+                    cache_path = os.path.join(self.intermediate_dir, ".cache")
+                    self.logger.debug(f"使用默认缓存路径: {cache_path}")
+                else:
+                    self.logger.debug(f"使用配置的缓存路径: {cache_path}")
+                
+                # 确保缓存目录存在
+                os.makedirs(cache_path, exist_ok=True)
+                self.logger.debug(f"确保缓存目录存在: {cache_path}")
+                
                 # 获取重试配置
                 retry_config = self.config.get_api_retry_config()
                 max_retries = retry_config.get('max_retries', 5)
@@ -149,6 +160,17 @@ class RuleGenerationOrchestrator:
                     "处理耗时_秒": round(process_duration, 3)
                 }
             )
+            
+            # 检查缓存目录是否仍然存在
+            if os.path.exists(cache_path):
+                self.logger.debug(f"规则处理完成后缓存目录仍然存在: {cache_path}")
+                try:
+                    files = os.listdir(cache_path)
+                    self.logger.debug(f"缓存目录内容: {files}")
+                except Exception as e:
+                    self.logger.debug(f"无法列出缓存目录内容: {e}")
+            else:
+                self.logger.debug(f"规则处理完成后缓存目录不存在: {cache_path}")
             
             # 步骤7：写入中间文件
             self.logger.debug("正在写入中间文件...")
@@ -185,11 +207,59 @@ class RuleGenerationOrchestrator:
     def _prepare_workspace(self) -> None:
         """通过清理和创建中间目录来准备工作空间。"""
         start_time = time.time()
-        if os.path.exists(self.intermediate_dir):
-            shutil.rmtree(self.intermediate_dir)
-            self.logger.debug(f"已清理中间目录: {self.intermediate_dir}")
         
-        os.makedirs(self.intermediate_dir)
+        # 获取缓存目录配置
+        cache_dir = self.config.get_cache_dir_path()
+        if not cache_dir:
+            # 如果没有配置独立的缓存目录，则使用默认的中间目录下的.cache
+            cache_dir = os.path.join(self.intermediate_dir, ".cache")
+        
+        # 检查缓存目录是否在中间目录内
+        cache_in_intermediate = os.path.commonpath([cache_dir, self.intermediate_dir]) == self.intermediate_dir
+        
+        if os.path.exists(self.intermediate_dir):
+            self.logger.debug(f"清理中间目录: {self.intermediate_dir}")
+            
+            if cache_in_intermediate and os.path.exists(cache_dir):
+                # 缓存目录在中间目录内，需要保存缓存文件
+                self.logger.debug(f"中间目录中包含缓存目录: {cache_dir}")
+                # 保存缓存目录中的内容
+                cache_files = {}
+                try:
+                    if os.path.exists(cache_dir):
+                        for file in os.listdir(cache_dir):
+                            file_path = os.path.join(cache_dir, file)
+                            if os.path.isfile(file_path):
+                                with open(file_path, 'rb') as f:
+                                    cache_files[file] = f.read()
+                        self.logger.debug(f"已保存缓存文件: {list(cache_files.keys())}")
+                except Exception as e:
+                    self.logger.warning(f"保存缓存文件时出错: {e}")
+                
+                # 删除中间目录
+                shutil.rmtree(self.intermediate_dir)
+                
+                # 重新创建中间目录和缓存目录
+                os.makedirs(self.intermediate_dir)
+                os.makedirs(cache_dir, exist_ok=True)
+                
+                # 恢复缓存文件
+                try:
+                    for file, content in cache_files.items():
+                        file_path = os.path.join(cache_dir, file)
+                        with open(file_path, 'wb') as f:
+                            f.write(content)
+                    self.logger.debug(f"已恢复缓存文件: {list(cache_files.keys())}")
+                except Exception as e:
+                    self.logger.warning(f"恢复缓存文件时出错: {e}")
+            else:
+                # 缓存目录在中间目录外或不存在，直接删除中间目录
+                shutil.rmtree(self.intermediate_dir)
+                os.makedirs(self.intermediate_dir)
+            self.logger.debug(f"已清理中间目录: {self.intermediate_dir}")
+        else:
+            os.makedirs(self.intermediate_dir)
+        
         duration = time.time() - start_time
         self.logger.debug(
             f"已创建中间目录: {self.intermediate_dir}",
@@ -373,9 +443,16 @@ class RuleGenerationOrchestrator:
                     if url:
                         urls_to_download.add(url)
         
+        self.logger.debug(f"收集到 {len(urls_to_download)} 个需要下载的URL")
+        for url in urls_to_download:
+            self.logger.debug(f"需要下载的URL: {url}")
+        
         # --- 阶段 2: 命令下载器并发更新所有缓存 ---
-        await downloader.download_rules(list(urls_to_download))
-
+        if urls_to_download:
+            await downloader.download_rules(list(urls_to_download))
+        else:
+            self.logger.debug("没有需要下载的规则集URL")
+        
         # --- 阶段 3: 处理和转换 (现在从本地缓存读取) ---
         processed_count = 0
         rule_set_count = 0
@@ -467,10 +544,17 @@ class RuleGenerationOrchestrator:
             behavior = provider_info.get("behavior", "domain")
             url = self._convert_mrs_url(url, format_, behavior)
             if not url:
+                self.logger.warning(f"无法获取有效的URL: {provider_name}")
                 return
 
             # 从下载器获取缓存路径
             local_path = downloader.get_cache_path_for_url(url)
+            self.logger.debug(f"缓存文件路径: {local_path}")
+            
+            # 检查缓存文件是否存在
+            if not os.path.exists(local_path):
+                self.logger.warning(f"缓存文件不存在: {local_path}")
+                return
             
             # 将路径和行为交给转换器
             content_list = RuleConverter.parse_ruleset_from_file(

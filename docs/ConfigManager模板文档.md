@@ -63,6 +63,8 @@ ConfigManager（配置管理器）是 Mihomo-Mosdns 同步系统的配置中心�
 | get_api_retry_config | Dict[str, Any] | API 重试配置 |
 | get_polling_interval | float | 监控轮询间隔（秒） |
 | get_debounce_interval | float | 事件防抖间隔（秒） |
-| get_mosdns_config_path | str | Mosdns 配置文件输出目录路径 |
+| get_mosdns_rules_path | str | Mosdns 配置文件输出目录路径 |
+| get_cache_dir_path | str | 缓存目录路径，用于存储下载的规则文件 |
 | get_mosdns_reload_command | str | Mosdns 服务重载命令 |
 | get_log_level | str | 日志级别 |
+| get_log_file_path | str | 日志文件路径 |

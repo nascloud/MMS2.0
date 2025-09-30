@@ -36,7 +36,7 @@ class ConfigManager:
             # Validate required keys
             required_keys = [
                 'mihomo_api_url', 'mihomo_api_timeout', 'api_retry_config',
-                'polling_interval', 'debounce_interval', 'mosdns_config_path',
+                'polling_interval', 'debounce_interval', 'mosdns_rules_path',
                 'mosdns_reload_command', 'log_level'
             ]
             
@@ -83,9 +83,13 @@ class ConfigManager:
         """Get the event debounce interval in seconds."""
         return self._config.get('debounce_interval')
 
-    def get_mosdns_config_path(self):
+    def get_mosdns_rules_path(self):
         """Get the path to the generated Mosdns rule file."""
-        return self._config.get('mosdns_config_path')
+        return self._config.get('mosdns_rules_path')
+
+    def get_cache_dir_path(self):
+        """Get the path to the cache directory."""
+        return self._config.get('cache_dir_path', '')
 
     def get_mosdns_reload_command(self):
         """Get the command to reload the Mosdns service."""

@@ -91,7 +91,8 @@ graph TD
  * `get_polling_interval()`: 返回监控轮询的时间间隔 (秒), e.g., `2`。
  * `get_debounce_interval()`: 返回事件防抖的延迟时间 (秒), e.g., `0.5`。
  * `get_mihomo_config_path()`: 返回 Mihomo 配置文件的绝对路径。
- * `get_mosdns_config_path()`: 返回生成的 `mosdns` 规则文件的绝对路径。
+ * `get_mosdns_rules_path()`: 返回生成的 `mosdns` 规则文件的绝对路径。
+ * `get_cache_dir_path()`: 返回缓存目录的绝对路径，用于存储下载的规则文件。
  * `get_mosdns_reload_command()`: 返回用于重载 `mosdns` 服务的完整系统命令。
  * `get_log_level()`: 返回日志级别, e.g., `INFO`, `DEBUG`。
 

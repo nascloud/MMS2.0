@@ -32,7 +32,18 @@ class RuleDownloader:
         self.max_backoff = max_backoff
         self.jitter = jitter
         self.logger = logging.getLogger(__name__)
-        os.makedirs(self.cache_dir, exist_ok=True)
+        self.logger.debug(f"创建RuleDownloader实例，缓存目录: {self.cache_dir}")
+        
+        # 检查目录是否真的存在
+        if os.path.exists(self.cache_dir):
+            self.logger.debug(f"确认缓存目录存在: {self.cache_dir}")
+            try:
+                files = os.listdir(self.cache_dir)
+                self.logger.debug(f"缓存目录内容: {files}")
+            except Exception as e:
+                self.logger.debug(f"无法列出缓存目录内容: {e}")
+        else:
+            self.logger.error(f"缓存目录不存在: {self.cache_dir}")
 
     def get_cache_path_for_url(self, url: str) -> str:
         """
@@ -116,6 +127,10 @@ class RuleDownloader:
         meta_path = content_path.replace(".list", ".meta.json")
         headers = {}
         
+        self.logger.debug(f"处理URL: {url}")
+        self.logger.debug(f"缓存文件路径: {content_path}")
+        self.logger.debug(f"元数据文件路径: {meta_path}")
+        
         # 1. 检查本地缓存元数据，获取ETag
         if os.path.exists(meta_path):
             try:
@@ -123,14 +138,18 @@ class RuleDownloader:
                     etag = json.load(f).get('etag')
                 if etag:
                     headers['If-None-Match'] = etag
+                    self.logger.debug(f"使用ETag进行条件请求: {etag}")
             except (IOError, json.JSONDecodeError):
                 self.logger.warning(f"无法读取元数据: {meta_path}")
+        else:
+            self.logger.debug("未找到元数据文件，将进行完整下载")
 
         # 2. 使用重试机制发起异步条件请求
         response = await self._download_with_retry(url, headers)
         
         if response is None:
             # 所有重试都失败了
+            self.logger.error(f"下载失败: {url}")
             return
 
         if response.status_code == 304:
@@ -138,6 +157,7 @@ class RuleDownloader:
             return
 
         # 3. 下载新内容并更新缓存
+        self.logger.debug(f"下载新内容: {url}")
         try:
             text = response.content.decode("utf-8", errors="replace")
         except Exception:
@@ -149,8 +169,10 @@ class RuleDownloader:
         if new_etag:
             with open(meta_path, 'w', encoding='utf-8') as f:
                 json.dump({'etag': new_etag}, f, ensure_ascii=False)
+            self.logger.debug(f"已保存ETag: {new_etag}")
         elif os.path.exists(meta_path):
             os.remove(meta_path)
+            self.logger.debug("已删除旧的元数据文件")
         
         self.logger.debug(f"成功更新缓存: {url}")
 
@@ -165,3 +187,13 @@ class RuleDownloader:
         tasks = [self._ensure_rule_updated(url) for url in urls]
         await asyncio.gather(*tasks)
         self.logger.debug("所有规则文件下载任务完成。")
+        
+        # 检查缓存目录是否仍然存在
+        if os.path.exists(self.cache_dir):
+            try:
+                files = os.listdir(self.cache_dir)
+                self.logger.debug(f"下载完成后缓存目录内容: {files}")
+            except Exception as e:
+                self.logger.debug(f"下载完成后无法列出缓存目录内容: {e}")
+        else:
+            self.logger.error(f"下载完成后缓存目录不存在: {self.cache_dir}")

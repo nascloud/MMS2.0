@@ -110,7 +110,7 @@ class MihomoMosdnsSyncService:
             self.state_monitor = StateMonitor(
                 api_client=self.api_client,
                 mosdns_controller=self.mosdns_controller,
-                mosdns_config_path=self.config_manager.get_mosdns_config_path(),
+                mosdns_rules_path=self.config_manager.get_mosdns_rules_path(),
                 polling_interval=self.config_manager.get_polling_interval(),
                 debounce_interval=self.config_manager.get_debounce_interval(),
                 mihomo_config_parser=self.mihomo_config_parser,
@@ -185,7 +185,7 @@ class MihomoMosdnsSyncService:
             self.logger.critical("配置管理器未初始化")
             return False
             
-        config_dir = self.config_manager.get_mosdns_config_path()
+        config_dir = self.config_manager.get_mosdns_rules_path()
         
         if not os.path.exists(config_dir):
             self.logger.critical(
@@ -272,7 +272,7 @@ class MihomoMosdnsSyncService:
             await self.state_monitor._generate_rules()
             
             # 启动状态监控器
-            self.logger.info("正在启动状态监控器")
+            self.logger.info("正在启动状态监控器...")
             await self.state_monitor.start()
             
         except Exception as e:

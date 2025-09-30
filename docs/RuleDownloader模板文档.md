@@ -4,13 +4,14 @@
 
 RuleDownloader（规则下载器）是 Mihomo-Mosdns 同步系统中的一个辅助模块，负责并发下载并缓存规则文件。该模块通过 HTTP 请求获取远程规则集文件，并将其缓存到本地目录中，以提高后续访问的性能并减少网络请求。
 
-RuleDownloader 使用 aiohttp 库进行异步 HTTP 请求，并支持并发下载多个规则文件。每个下载的文件都会根据其 URL 生成唯一的缓存键，确保缓存文件的唯一性和可追溯性。
+RuleDownloader 使用 httpx 库进行异步 HTTP 请求，并支持并发下载多个规则文件。每个下载的文件都会根据其 URL 生成唯一的缓存键，确保缓存文件的唯一性和可追溯性。
 
 ## 工作流程
 
 1. **初始化**：
+   - 接收缓存目录路径作为参数
    - 创建缓存目录（如果不存在）
-   - 初始化 aiohttp 客户端会话
+   - 初始化 httpx 客户端会话
    - 设置日志记录器
 
 2. **缓存键生成**：
@@ -39,34 +40,45 @@ RuleDownloader 使用 aiohttp 库进行异步 HTTP 请求，并支持并发下�
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
-| cache_dir | str | 是 | 缓存目录路径 |
-| session | aiohttp.ClientSession | 是 | aiohttp 客户端会话实例 |
+| client | httpx.AsyncClient | 是 | httpx 异步客户端实例 |
+| cache_dir | str | 是 | 缓存目录路径，可通过 config.yaml 中的 cache_dir_path 配置项设置 |
+| max_retries | int | 否 | 最大重试次数，默认为 5 |
+| initial_backoff | float | 否 | 初始退避时间（秒），默认为 1.0 |
+| max_backoff | float | 否 | 最大退避时间（秒），默认为 16.0 |
+| jitter | bool | 否 | 是否添加抖动以减少重试冲突，默认为 True |
 
-### _get_cache_key 方法
+### get_cache_path_for_url 方法
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
 | url | str | 是 | 规则文件的 URL |
 
-### _download_and_cache 方法
+### _download_with_retry 方法
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
 | url | str | 是 | 要下载的规则文件 URL |
+| headers | dict | 是 | HTTP 请求头 |
+
+### _ensure_rule_updated 方法
+
+| 参数名 | 类型 | 必需 | 描述 |
+|--------|------|------|------|
+| url | str | 是 | 要确保更新的规则文件 URL |
 
 ### download_rules 方法
 
 | 参数名 | 类型 | 必需 | 描述 |
 |--------|------|------|------|
-| urls_to_update | list[str] | 是 | 待更新的 URL 列表 |
+| urls | list[str] | 是 | 待下载的 URL 列表 |
 
 ## 输出参数
 
-### _get_cache_key 方法
+### get_cache_path_for_url 方法
 
 | 返回类型 | 描述 |
 |----------|------|
-| str | URL 的 SHA256 哈希值的十六进制摘要 |
+| str | URL 对应的本地缓存文件路径 |
 
 ### download_rules 方法
 

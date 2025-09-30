@@ -42,14 +42,19 @@ RuleGenerationOrchestrator（规则生成协调器）是 Mihomo-Mosdns 同步系
      - 调用 RuleConverter.convert_single_rule 转换为 Mosdns 格式
      - 将转换后的规则添加到内存聚合器中，使用 "_inline" 作为特殊提供者名称
 
-6. **写入中间文件**：
+6. **规则下载与缓存**：
+   - 创建 RuleDownloader 实例，使用配置文件中指定的缓存目录路径（通过 `cache_dir_path` 配置项）
+   - 如果未配置独立的缓存目录，则使用默认路径：`{intermediate_dir}/.cache`
+   - 并发下载所有 RULE-SET 规则文件并缓存到指定目录
+
+7. **写入中间文件**：
    - 遍历内存聚合器的所有层级
    - 对于每个非空的规则集合，将其内容写入对应的中间文件
    - 文件路径结构：`{intermediate_dir}/{policy}/{content_type}/provider_{provider_name}.list`
    - 对于内联规则，文件名为 `_inline_rules.list`
    - 确保固定策略文件夹（DIRECT、PROXY、REJECT）都存在
 
-7. **返回结果**：
+8. **返回结果**：
    - 成功执行后返回生成的中间目录路径
 
 ## 输入参数
@@ -81,9 +86,13 @@ RuleGenerationOrchestrator（规则生成协调器）是 Mihomo-Mosdns 同步系
 
 1. **中间目录清理**：删除旧的中间目录并创建新的目录。
 
-2. **中间文件生成**：在中间目录中创建以下结构的文件：
+2. **缓存目录创建**：根据配置创建缓存目录用于存储下载的规则文件：
+   - 如果配置了 `cache_dir_path`，则使用该路径作为缓存目录
+   - 如果未配置，则使用默认路径：`{intermediate_dir}/.cache`
+
+3. **中间文件生成**：在中间目录中创建以下结构的文件：
    ```
-   {mosdns_config_path}_intermediate/
+   {mosdns_rules_path}_intermediate/
    ├── DIRECT/
    │   ├── domain/
    │   │   ├── provider_{provider_name1}.list
@@ -112,10 +121,10 @@ RuleGenerationOrchestrator（规则生成协调器）是 Mihomo-Mosdns 同步系
            └── _inline_rules.list
    ```
    其中：
-   - `{mosdns_config_path}` 是配置文件中指定的 Mosdns 配置路径。例如，如果 `mosdns_config_path` 设置为 `D:\Software\MMS2.0\output`，则中间目录为 `D:\Software\MMS2.0\output_intermediate`。
+   - `{mosdns_rules_path}` 是配置文件中指定的 Mosdns 配置路径。例如，如果 `mosdns_rules_path` 设置为 `D:\Software\MMS2.0\output`，则中间目录为 `D:\Software\MMS2.0\output_intermediate`。
    - DIRECT、PROXY、REJECT 是固定的策略文件夹名称，确保与 RuleMerger 模块的期望输入格式一致。
    - `domain`、`ipv4` 和 `ipv6` 是内容类型，根据 RULE-SET 提供者的 behavior 属性或规则内容自动识别。
    - `provider_{provider_name}.list` 是从 RULE-SET 提供者获取的规则文件。
    - `_inline_rules.list` 是内联规则文件，包含直接在配置中定义的规则。
 
-3. **日志记录**：记录规则生成过程中的关键信息和错误。
+4. **日志记录**：记录规则生成过程中的关键信息和错误。

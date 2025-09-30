@@ -15,6 +15,7 @@
 - **两阶段架构**: 采用分发-合并的两阶段规则生成架构，提高可维护性和可调试性
 - **动态策略组识别**: 自动识别各种类型的策略组，包括自定义类型如 LoadBalance 和 Relay
 - **智能状态检测**: 仅在最终出口策略（DIRECT/PROXY/REJECT）发生变化时触发规则生成
+- **缓存优化**: 支持配置独立的缓存目录，提高规则处理性能
 
 ## 工作原理
 
@@ -83,7 +84,9 @@ polling_interval: 10      # 轮询间隔(秒) - 增加到10秒以减少误触发
 debounce_interval: 2      # 防抖间隔(秒) - 增加到2秒以过滤临时波动
 
 # Mosdns 配置
-mosdns_config_path: "/etc/mosdns/rules/mihomo_generated.list"  # 生成的规则文件路径
+mosdns_rules_path: "/etc/mosdns/rules/mihomo_generated.list"  # 生成的规则文件路径
+# 缓存目录路径，用于存储下载的规则文件（可选，默认使用mosdns_rules_path_intermediate/.cache）
+cache_dir_path: "/path/to/cache"  # 缓存目录路径
 mosdns_reload_command: "sudo mosdns reload -d /etc/mosdns"     # 重载 Mosdns 服务的命令
 
 # 日志配置
