@@ -40,7 +40,7 @@ touch /etc/mosdns/custom/ddns.txt
 echo "所有必需的 MosDNS 规则文件已准备就绪"
 
 # 检查mosdns服务是否安装
-if mosdns service status 2>&1 | grep -q "not installed"; then
+if mosdns service status 2>&1 | grep -q "Error"; then
     echo "MosDNS 服务未安装，正在安装..."
     mosdns service install -c /etc/mosdns/config.yaml -d /etc/mosdns || true
     # 启动服务
