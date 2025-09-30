@@ -25,16 +25,17 @@ fi
 # 创建 MosDNS 必需的规则文件目录和空文件
 echo "创建 MosDNS 规则文件目录..."
 mkdir -p /etc/mosdns/rules
-mkdir -p ./custom
+mkdir -p /etc/mosdns/custom
 
 # 创建 MosDNS 配置中必需的规则文件（如果不存在）
 echo "检查并创建必需的 MosDNS 规则文件..."
 touch /etc/mosdns/rules/direct_domain.txt
 touch /etc/mosdns/rules/proxy_domain.txt
 touch /etc/mosdns/rules/reject_domain.txt
-touch ./custom/direct.txt
-touch ./custom/proxy.txt
-touch ./custom/local_ptr.txt
+touch /etc/mosdns/custom/direct.txt
+touch /etc/mosdns/custom/proxy.txt
+touch /etc/mosdns/custom/local_ptr.txt
+touch /etc/mosdns/custom/ddns.txt
 
 echo "所有必需的 MosDNS 规则文件已准备就绪"
 

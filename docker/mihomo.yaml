@@ -43,23 +43,31 @@ dns:
     enable: true
     listen: '0.0.0.0:1053'
     ipv6: false
+    concurrent: true
     respect-rules: true
-    default-nameserver: [119.29.29.29, 223.5.5.5]
-    enhanced-mode: fake-ip
-    fake-ip-range: 198.88.0.1/16
     use-hosts: false
     use-system-hosts: true
-    nameserver:
-      - https://120.53.53.53/dns-query
-      - https://223.5.5.5/dns-query
+    
+    enhanced-mode: fake-ip
+    fake-ip-range: 100.127.0.0/17
+    fake-ip-filter-mode: blacklist
     fake-ip-filter:
       - "*"
       - "+.lan"
       - "+.local"
       - "+.market.xiaomi.com"
+      - "rule-set:cn_domain,direct_domain,ai_domain_cn"
+
+    default-nameserver: [119.29.29.29, 223.5.5.5]
+
+    nameserver:
+      - https://120.53.53.53/dns-query
+      - https://223.5.5.5/dns-query
+
     proxy-server-nameserver:
       - https://120.53.53.53/dns-query
       - https://223.5.5.5/dns-query
+
     nameserver-policy:
       '+.arpa': '192.168.50.254'
       'rule-set:cn_domain,direct_domain,ai_domain_cn':
@@ -68,7 +76,7 @@ dns:
       'rule-set:geolocation-!cn,proxy_domain,youtube_domain,google_domain,spotify_domain,ai_domain,ai_domain_!cn,github_domain,twitter_domain,telegram_domain,netflix_domain,bahamut_domain,bilibili_domain':
         - https://dns.google/dns-query
         - https://cloudflare-dns.com/dns-query
-        - https://175.178.106.166:8009/dns-query/mai
+
 ######### 锚点 start #######
 #这里是订阅更新和延迟测试相关的
 pp: &pp {type: http, interval: 3600, health-check: {enable: true, url: "https://www.apple.com/library/test/success.html", interval: 300}}
