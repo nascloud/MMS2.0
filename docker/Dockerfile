@@ -1,5 +1,5 @@
 # 第一阶段：构建和打包 Python 项目
-FROM python:3.11-slim AS builder
+FROM python:3.11-slim-bullseye AS builder
 
 ENV APP_DIR=/app
 WORKDIR $APP_DIR
@@ -12,9 +12,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# 安装 Python 依赖
+# 复制项目配置文件
+COPY ./pyproject.toml $APP_DIR/
+
+# 安装 Python 依赖（仅安装项目运行所需的依赖，不包括测试依赖）
 RUN pip install --upgrade pip && \
-    pip install httpx pyyaml watchdog python-json-logger pyinstaller
+    # 为项目安装运行时依赖
+    pip install . && pip install pyinstaller
 
 # 复制源码
 COPY ./main.py $APP_DIR/
@@ -88,18 +92,15 @@ RUN set -e && \
     echo "mosdns installed successfully"
 
 # 第二阶段：精简运行环境
-FROM python:3.11-slim
+FROM debian:bullseye-slim
 
 ENV APP_DIR=/app
 WORKDIR $APP_DIR
 
-# 安装必要运行依赖
+# 安装必要运行依赖（不包含Python）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    procps \
-    net-tools \
-	dnsutils \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-
 
 # 复制配置文件到默认配置目录
 COPY ./docker/config.yaml $APP_DIR/config/
@@ -117,7 +118,6 @@ COPY --from=builder /usr/local/bin/mihomo /usr/local/bin/mihomo
 RUN chmod +x $APP_DIR/mms
 RUN chmod +x /usr/local/bin/mosdns
 RUN chmod +x /usr/local/bin/mihomo
-
 
 # 暴露端口
 EXPOSE 53/tcp 53/udp
