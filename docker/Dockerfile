@@ -14,7 +14,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 安装 Python 依赖
 RUN pip install --upgrade pip && \
-    pip install httpx pyyaml requests watchdog python-json-logger pyinstaller
+    pip install httpx pyyaml watchdog python-json-logger pyinstaller
 
 # 复制源码
 COPY ./main.py $APP_DIR/

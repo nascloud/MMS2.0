@@ -6,24 +6,10 @@ import os
 from datetime import datetime
 
 
-class ChineseJsonFormatter(JsonFormatter):
-    """支持中文日志级别的JSON格式化器。"""
-    
-    # 日志级别的中文映射
-    LEVEL_CHINESE = {
-        'DEBUG': '调试',
-        'INFO': '信息',
-        'WARNING': '警告',
-        'WARN': '警告',
-        'ERROR': '错误',
-        'CRITICAL': '严重'
-    }
+class CustomJsonFormatter(JsonFormatter):
+    """自定义JSON格式化器。"""
     
     def format(self, record):
-        # 将英文日志级别转换为中文
-        if hasattr(record, 'levelname') and record.levelname in self.LEVEL_CHINESE:
-            record.levelname = self.LEVEL_CHINESE[record.levelname]
-        
         # 添加进程ID和线程信息
         if not hasattr(record, 'pid'):
             record.pid = os.getpid()
@@ -40,7 +26,7 @@ class ChineseJsonFormatter(JsonFormatter):
         return super().format(record)
     
     def serialize_log_record(self, log_record):
-        """重写序列化方法，确保中文正确显示"""
+        """重写序列化方法，确保正确显示"""
         return json.dumps(log_record, ensure_ascii=False, separators=(',', ':'))
 
 
@@ -63,8 +49,15 @@ def setup_logger(log_level='INFO', log_file_path=None):
     # 设置日志级别
     root_logger.setLevel(getattr(logging, log_level.upper(), logging.INFO))
     
+    # 控制第三方库的日志级别，避免过多的底层日志干扰主业务日志输出
+    httpx_logger = logging.getLogger("httpx")
+    httpx_logger.setLevel(logging.WARNING)
+    
+    httpcore_logger = logging.getLogger("httpcore")
+    httpcore_logger.setLevel(logging.WARNING)
+    
     # 创建带有附加字段的自定义JSON格式化器，用于结构化日志记录
-    json_formatter = ChineseJsonFormatter(
+    json_formatter = CustomJsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(filename)s %(lineno)d',
         rename_fields={
             'asctime': '时间', 
