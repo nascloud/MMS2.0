@@ -60,15 +60,15 @@ def setup_logger(log_level='INFO', log_file_path=None):
     json_formatter = CustomJsonFormatter(
         '%(asctime)s %(name)s %(levelname)s %(message)s %(filename)s %(lineno)d',
         rename_fields={
-            'asctime': '时间', 
-            'name': '模块', 
-            'levelname': '级别',
-            'filename': '文件',
-            'lineno': '行号'
+            'asctime': 'time', 
+            'name': 'module', 
+            'levelname': 'level',
+            'filename': 'file',
+            'lineno': 'line'
         },
         static_fields={
-            '服务名称': 'mihomo-mosdns-sync',
-            '版本': '2.0'
+            'service': 'mms',
+            'version': '2.0'
         }
     )
     
