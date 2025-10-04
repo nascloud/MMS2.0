@@ -134,14 +134,13 @@ class MosdnsServiceController:
             
             # 根据返回码判断服务状态
             if process.returncode == 0:
-                # 标准化状态输出
-                normalized_status = stdout_str if stdout_str else "unknown"
+                # 优化：返回码为 0 且 stdout 包含 'running' 时，返回标准化状态 'running'
+                if "running" in stdout_str.lower():
+                    normalized_status = "running"
+                else:
+                    normalized_status = stdout_str if stdout_str else "unknown"
+                
                 self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
-                return normalized_status
-            else:
-                # 当服务停止时，返回码为非0
-                normalized_status = "stopped"
-                self.logger.info(f"Mosdns服务当前状态: {normalized_status} (命令执行失败, 返回码: {process.returncode})")
                 return normalized_status
         except Exception as e:
             self.logger.error(f"查询Mosdns服务状态时发生异常: {str(e)}")
