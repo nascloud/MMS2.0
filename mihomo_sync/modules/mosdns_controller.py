@@ -40,7 +40,8 @@ class MosdnsServiceController:
                 self.logger.info(f"Mosdns服务重新加载成功, return_code: {process.returncode}, stdout: {stdout_str}, 执行耗时_秒: {round(reload_duration, 3)}")
                 # 检查服务状态
                 status = await self.status()
-                self.logger.info(f"正在检查Mosdns服务状态: {status}")
+                self.logger.info(f"Mosdns服务重新加载后状态: {status}")
+                # 只要重新加载命令执行成功，就返回True，即使服务状态检查失败也不影响
                 return True
             else:
                 stdout_str = stdout.decode().strip() if stdout else ""
@@ -114,7 +115,7 @@ class MosdnsServiceController:
         """
         查询Mosdns服务状态。
         Returns:
-            str: 服务状态输出
+            str: 服务状态输出 ('running' 表示运行中, 'stopped' 表示已停止, 'unknown' 表示未知状态)
         """
         command = "mosdns service status"
         self.logger.debug("查询Mosdns服务状态")
@@ -125,14 +126,23 @@ class MosdnsServiceController:
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
+            
+            # 根据返回码判断服务状态
             if process.returncode == 0:
                 status_output = stdout.decode().strip()
-                self.logger.info(f"Mosdns服务当前状态: {status_output}")
-                return status_output
+                # 标准化状态输出
+                if "running" in status_output.lower():
+                    normalized_status = "running"
+                else:
+                    normalized_status = status_output if status_output else "unknown"
+                
+                self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
+                return normalized_status
             else:
-                error_output = stderr.decode().strip()
-                self.logger.error(f"查询Mosdns服务状态失败: {error_output}")
-                return error_output
+                # 当服务停止时，返回码为1
+                normalized_status = "stopped"
+                self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
+                return normalized_status
         except Exception as e:
             self.logger.error(f"查询Mosdns服务状态时发生异常: {str(e)}")
-            return str(e)
+            return "unknown"
