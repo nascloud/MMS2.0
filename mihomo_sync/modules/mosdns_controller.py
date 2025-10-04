@@ -142,6 +142,10 @@ class MosdnsServiceController:
                 
                 self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
                 return normalized_status
+            else:
+                # 当返回码非0时，认为服务处于停止状态
+                self.logger.info("Mosdns服务当前状态: stopped")
+                return "stopped"
         except Exception as e:
             self.logger.error(f"查询Mosdns服务状态时发生异常: {str(e)}")
             return "unknown"
