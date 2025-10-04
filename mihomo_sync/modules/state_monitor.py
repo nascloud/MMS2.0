@@ -44,6 +44,7 @@ class StateMonitor:
         self.logger = logging.getLogger(__name__)
         self._last_state_hash = None
         self._last_state_snapshot = None
+        self._last_state_changes = []  # 用于存储上一次的变更信息
         self._debounce_task = None
         self.policy_resolver = PolicyResolver()
         self.logger.info(
@@ -136,7 +137,9 @@ class StateMonitor:
                 self._last_state_snapshot = state_snapshot
             else:
                 # 比较状态变化并记录详细信息
-                self._log_state_changes(self._last_state_snapshot, state_snapshot)
+                changes = self._log_state_changes(self._last_state_snapshot, state_snapshot)
+                # 保存变更信息，供start方法使用
+                self._last_state_changes = changes
                 # 更新最后状态快照
                 self._last_state_snapshot = state_snapshot
             
@@ -154,14 +157,19 @@ class StateMonitor:
             )
             raise
 
-    def _log_state_changes(self, old_state: Dict[str, Any], new_state: Dict[str, Any]) -> None:
+    def _log_state_changes(self, old_state: Dict[str, Any], new_state: Dict[str, Any]) -> list:
         """
         记录状态变化的详细信息。
         
         Args:
             old_state (dict): 之前的状态快照
             new_state (dict): 当前的状态快照
+            
+        Returns:
+            list: 包含所有变更项目的列表
         """
+        changes = []
+        
         # 检查代理变化
         old_proxies = old_state.get("proxies", {})
         new_proxies = new_state.get("proxies", {})
@@ -176,6 +184,7 @@ class StateMonitor:
                         "type": "新增"
                     }
                 )
+                changes.append(f"新增策略组:{name}")
             elif old_proxies[name] != proxy:
                 self.logger.debug(
                     f"检测到策略组变化: {name}",
@@ -185,6 +194,7 @@ class StateMonitor:
                         "type": "修改"
                     }
                 )
+                changes.append(f"策略组变化:{name}")
         
         # 检查删除的代理
         for name in old_proxies:
@@ -196,6 +206,7 @@ class StateMonitor:
                         "type": "删除"
                     }
                 )
+                changes.append(f"删除策略组:{name}")
         
         # 检查规则提供者变化
         old_providers = old_state.get("rule_providers", {})
@@ -212,29 +223,31 @@ class StateMonitor:
                         "type": "新增"
                     }
                 )
+                changes.append(f"新增规则提供者:{name}")
             elif old_providers[name] != provider:
                 old_provider = old_providers[name]
                 new_provider = provider
-                changes = {}
+                changes_dict = {}
                 if old_provider.get("updatedAt") != new_provider.get("updatedAt"):
-                    changes["updatedAt"] = {
+                    changes_dict["updatedAt"] = {
                         "old": old_provider.get("updatedAt"),
                         "new": new_provider.get("updatedAt")
                     }
                 if old_provider.get("vehicleType") != new_provider.get("vehicleType"):
-                    changes["vehicleType"] = {
+                    changes_dict["vehicleType"] = {
                         "old": old_provider.get("vehicleType"),
                         "new": new_provider.get("vehicleType")
                     }
                 
-                if changes:
+                if changes_dict:
                     self.logger.debug(
                         f"检测到规则提供者变化: {name}",
                         extra={
-                            "changes": changes,
+                            "changes": changes_dict,
                             "type": "修改"
                         }
                     )
+                    changes.append(f"规则提供者变化:{name}")
         
         # 检查删除的提供者
         for name in old_providers:
@@ -248,6 +261,9 @@ class StateMonitor:
                         "type": "删除"
                     }
                 )
+                changes.append(f"删除规则提供者:{name}")
+                
+        return changes
 
     def _is_strategy_group(self, proxy_data: Dict[str, Any]) -> bool:
         """
@@ -288,11 +304,12 @@ class StateMonitor:
                 # 与之前的状态进行比较
                 if self._last_state_hash is not None and current_state_hash != self._last_state_hash:
                     self.logger.info(
-                        "检测到状态变化,开始更新...",
+                        f"检测到状态变化,开始更新... 变更项目: {', '.join(self._last_state_changes) if self._last_state_changes else '未知变更'}",
                         extra={
                             "previous_hash": self._last_state_hash[:16] + "...",
                             "current_hash": current_state_hash[:16] + "...",
-                            "cycle_count": cycle_count
+                            "cycle_count": cycle_count,
+                            "changes": self._last_state_changes
                         }
                     )
                     
