@@ -118,7 +118,7 @@ class MosdnsServiceController:
             str: 服务状态输出 ('running' 表示运行中, 'stopped' 表示已停止, 'unknown' 表示未知状态)
         """
         command = "mosdns service status"
-        self.logger.debug("查询Mosdns服务状态")
+        self.logger.debug(f"查询Mosdns服务状态, 执行命令: {command}")
         try:
             process = await asyncio.create_subprocess_shell(
                 command,
@@ -127,21 +127,21 @@ class MosdnsServiceController:
             )
             stdout, stderr = await process.communicate()
             
+            stdout_str = stdout.decode().strip() if stdout else ""
+            stderr_str = stderr.decode().strip() if stderr else ""
+            
+            self.logger.debug(f"Mosdns服务状态查询结果: return_code={process.returncode}, stdout='{stdout_str}', stderr='{stderr_str}'")
+            
             # 根据返回码判断服务状态
             if process.returncode == 0:
-                status_output = stdout.decode().strip()
                 # 标准化状态输出
-                if "running" in status_output.lower():
-                    normalized_status = "running"
-                else:
-                    normalized_status = status_output if status_output else "unknown"
-                
+                normalized_status = stdout_str if stdout_str else "unknown"
                 self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
                 return normalized_status
             else:
-                # 当服务停止时，返回码为1
+                # 当服务停止时，返回码为非0
                 normalized_status = "stopped"
-                self.logger.info(f"Mosdns服务当前状态: {normalized_status}")
+                self.logger.info(f"Mosdns服务当前状态: {normalized_status} (命令执行失败, 返回码: {process.returncode})")
                 return normalized_status
         except Exception as e:
             self.logger.error(f"查询Mosdns服务状态时发生异常: {str(e)}")
