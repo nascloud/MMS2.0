@@ -17,12 +17,7 @@ class MosdnsServiceController:
         """
         self.reload_command = reload_command
         self.logger = logging.getLogger(__name__)
-        self.logger.debug(
-            "Mosdns服务控制器初始化完成",
-            extra={
-                "reload_command": reload_command
-            }
-        )
+        self.logger.debug(f"Mosdns服务控制器初始化完成, reload_command: {reload_command}")
 
     async def reload(self) -> bool:
         """
@@ -41,41 +36,20 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             reload_duration = time.time() - reload_start_time
             if process.returncode == 0:
-                self.logger.info(
-                    "Mosdns服务重新加载成功",
-                    extra={
-                        "return_code": process.returncode,
-                        "stdout": stdout.decode().strip() if stdout else "",
-                        "执行耗时_秒": round(reload_duration, 3)
-                    }
-                )
+                stdout_str = stdout.decode().strip() if stdout else ""
+                self.logger.info(f"Mosdns服务重新加载成功, return_code: {process.returncode}, stdout: {stdout_str}, 执行耗时_秒: {round(reload_duration, 3)}")
                 # 检查服务状态
                 status = await self.status()
-                self.logger.info("正在检查Mosdns服务状态", extra={"status": status})
+                self.logger.info(f"正在检查Mosdns服务状态: {status}")
                 return True
             else:
-                self.logger.error(
-                    "重新加载Mosdns服务失败",
-                    extra={
-                        "command": self.reload_command,
-                        "return_code": process.returncode,
-                        "stdout": stdout.decode().strip() if stdout else "",
-                        "stderr": stderr.decode().strip() if stderr else "",
-                        "执行耗时_秒": round(reload_duration, 3)
-                    }
-                )
+                stdout_str = stdout.decode().strip() if stdout else ""
+                stderr_str = stderr.decode().strip() if stderr else ""
+                self.logger.error(f"重新加载Mosdns服务失败, command: {self.reload_command}, return_code: {process.returncode}, stdout: {stdout_str}, stderr: {stderr_str}, 执行耗时_秒: {round(reload_duration, 3)}")
                 return False
         except Exception as e:
             reload_duration = time.time() - reload_start_time
-            self.logger.error(
-                "重新加载Mosdns服务时发生异常",
-                extra={
-                    "command": self.reload_command,
-                    "error": str(e),
-                    "error_type": type(e).__name__,
-                    "执行耗时_秒": round(reload_duration, 3)
-                }
-            )
+            self.logger.error(f"重新加载Mosdns服务时发生异常, command: {self.reload_command}, error: {str(e)}, error_type: {type(e).__name__}, 执行耗时_秒: {round(reload_duration, 3)}")
             return False
 
     async def restart(self) -> bool:
@@ -96,13 +70,15 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             duration = time.time() - start_time
             if process.returncode == 0:
-                self.logger.info("Mosdns服务已成功重启", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
+                stdout_str = stdout.decode().strip()
+                self.logger.info(f"Mosdns服务已成功重启, stdout: {stdout_str}, 耗时: {round(duration, 3)}")
                 return True
             else:
-                self.logger.error("Mosdns服务重启失败", extra={"stderr": stderr.decode().strip(), "耗时": round(duration, 3)})
+                stderr_str = stderr.decode().strip()
+                self.logger.error(f"Mosdns服务重启失败, stderr: {stderr_str}, 耗时: {round(duration, 3)}")
                 return False
         except Exception as e:
-            self.logger.error("重启Mosdns服务时发生异常", extra={"error": str(e)})
+            self.logger.error(f"重启Mosdns服务时发生异常, error: {str(e)}")
             return False
 
     async def stop(self) -> bool:
@@ -123,13 +99,15 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             duration = time.time() - start_time
             if process.returncode == 0:
-                self.logger.info("Mosdns服务已成功停止", extra={"stdout": stdout.decode().strip(), "耗时": round(duration, 3)})
+                stdout_str = stdout.decode().strip()
+                self.logger.info(f"Mosdns服务已成功停止, stdout: {stdout_str}, 耗时: {round(duration, 3)}")
                 return True
             else:
-                self.logger.error("Mosdns服务停止失败", extra={"stderr": stderr.decode().strip(), "耗时": round(duration, 3)})
+                stderr_str = stderr.decode().strip()
+                self.logger.error(f"Mosdns服务停止失败, stderr: {stderr_str}, 耗时: {round(duration, 3)}")
                 return False
         except Exception as e:
-            self.logger.error("停止Mosdns服务时发生异常", extra={"error": str(e)})
+            self.logger.error(f"停止Mosdns服务时发生异常, error: {str(e)}")
             return False
 
     async def status(self) -> str:
@@ -149,12 +127,12 @@ class MosdnsServiceController:
             stdout, stderr = await process.communicate()
             if process.returncode == 0:
                 status_output = stdout.decode().strip()
-                self.logger.info("Mosdns服务当前状态:", extra={"status": status_output})
+                self.logger.info(f"Mosdns服务当前状态: {status_output}")
                 return status_output
             else:
                 error_output = stderr.decode().strip()
-                self.logger.error("查询Mosdns服务状态失败", extra={"error": error_output})
+                self.logger.error(f"查询Mosdns服务状态失败: {error_output}")
                 return error_output
         except Exception as e:
-            self.logger.error("查询Mosdns服务状态时发生异常", extra={"error": str(e)})
+            self.logger.error(f"查询Mosdns服务状态时发生异常: {str(e)}")
             return str(e)
